@@ -16,8 +16,10 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "openai": "^6.9.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6",
     "react-youtube": "^10.1.0",
     "replicate": "^1.4.0",
     "youtubei.js": "^16.0.1"

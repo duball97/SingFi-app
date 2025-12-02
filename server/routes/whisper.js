@@ -1,53 +1,69 @@
-import express from 'express';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import fs from 'fs';
-import { supabase } from '../services/supabase.js';
-import { replicate } from '../services/replicate.js';
+import express from "express";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { tmpdir } from "os";
+import { join } from "path";
+import fs from "fs";
+import { supabase } from "../services/supabase.js";
+import OpenAI from "openai";
 
 const execAsync = promisify(exec);
 const router = express.Router();
 
-// STEP 1 — Download + Convert to Whisper-friendly WAV
+// Lazy-load OpenAI client
+let openaiClient = null;
+const getOpenAI = () => {
+  if (!openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Missing OPENAI_API_KEY environment variable');
+    }
+    openaiClient = new OpenAI({
+      apiKey: apiKey,
+    });
+  }
+  return openaiClient;
+};
+
+// STEP 1 — Download + Convert into perfect Whisper WAV file
 async function youtubeToWavBuffer(youtubeUrl) {
   const ts = Date.now();
   const tempInput = join(tmpdir(), `audio-${ts}.m4a`);
   const tempOutput = join(tmpdir(), `audio-${ts}.wav`);
 
   try {
-    // DOWNLOAD BEST AUDIO (usually .m4a or .webm)
+    // Download best audio using yt-dlp
     await execAsync(`yt-dlp -f bestaudio -o "${tempInput}" "${youtubeUrl}"`);
 
-    // CONVERT TO WAV 16kHz MONO — Whisper LOVES THIS FORMAT
+    // Convert to WAV 16kHz mono
     await execAsync(
       `ffmpeg -y -i "${tempInput}" -ac 1 -ar 16000 -f wav "${tempOutput}"`
     );
 
     const buffer = fs.readFileSync(tempOutput);
 
-    // CLEANUP
     fs.unlinkSync(tempInput);
     fs.unlinkSync(tempOutput);
 
     return buffer;
   } catch (err) {
     console.error("FFMPEG/YTDLP ERROR:", err);
-    throw new Error(`Failed audio processing: ${err.message}`);
+    throw new Error(`Audio processing failed: ${err.message}`);
   }
 }
 
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { youtubeId } = req.body;
-    if (!youtubeId) return res.status(400).json({ error: 'youtubeId required' });
 
-    // CACHE CHECK
+    if (!youtubeId)
+      return res.status(400).json({ error: "youtubeId required" });
+
+    // Check cache
     const { data: cached } = await supabase
-      .from('songs')
-      .select('*')
-      .eq('youtube_id', youtubeId)
+      .from("songs")
+      .select("*")
+      .eq("youtube_id", youtubeId)
       .single();
 
     if (cached && cached.segments) {
@@ -59,42 +75,48 @@ router.post('/', async (req, res) => {
     }
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
-    console.log("Downloading + converting:", youtubeUrl);
+    console.log("Processing:", youtubeUrl);
 
-    // STEP 2 — Convert YT → WAV (clean audio)
+    // Download + convert
     const wavBuffer = await youtubeToWavBuffer(youtubeUrl);
-    console.log("WAV size:", (wavBuffer.length / 1024 / 1024).toFixed(2), "MB");
-
-    // STEP 3 — Send WAV buffer to Whisper
-    console.log("Sending to Whisper...");
-    const output = await replicate.run(
-      "openai/whisper:large-v3",
-      {
-        input: {
-          audio: wavBuffer,   // EXACT format Whisper expects
-          model: "large-v3",
-        }
-      }
+    console.log(
+      "WAV size:",
+      (wavBuffer.length / 1024 / 1024).toFixed(2),
+      "MB"
     );
 
-    const segments = output.segments ?? [];
-    const fullText = output.text ?? "";
+    // STEP 2 — Send WAV buffer to OpenAI Whisper
+    console.log("Sending to OpenAI Whisper...");
 
-    // SAVE TO SUPABASE
+    const openai = getOpenAI();
+    const transcription = await openai.audio.transcriptions.create({
+      file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
+      model: "whisper-1",
+      response_format: "verbose_json", // gives segments + text
+    });
+
+    const segments = transcription.segments || [];
+    const fullText = transcription.text || "";
+
+    // Save in Supabase
     await supabase
-      .from('songs')
-      .upsert({
-        youtube_id: youtubeId,
-        lyrics: fullText,
-        segments,
-      }, { onConflict: 'youtube_id' });
+      .from("songs")
+      .upsert(
+        {
+          youtube_id: youtubeId,
+          lyrics: fullText,
+          segments: segments,
+        },
+        { onConflict: "youtube_id" }
+      );
+
+    console.log('✅ Game ready! Segments:', segments.length, 'Lyrics length:', fullText.length);
 
     res.json({
       cached: false,
       segments,
       lyrics: fullText,
     });
-
   } catch (error) {
     console.error("Whisper error:", error);
     res.status(500).json({ error: error.message });

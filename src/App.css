@@ -467,3 +467,217 @@
     font-size: 1.5rem;
   }
 }
+
+/* Game Page Styles */
+.game-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.game-video-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.game-video-background > div {
+  width: 100% !important;
+  height: 100% !important;
+  padding-bottom: 0 !important;
+}
+
+.game-video-background iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vw;
+  height: 56.25vw;
+  min-height: 100vh;
+  min-width: 177.77vh;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.game-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.game-top-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+}
+
+.back-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  background: rgba(20, 20, 20, 0.8);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 107, 53, 0.3);
+  color: white;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.back-button:hover {
+  background: rgba(255, 107, 53, 0.2);
+  border-color: rgba(255, 107, 53, 0.5);
+}
+
+.game-lyrics-container {
+  padding: 2rem;
+  padding-bottom: 4rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.game-lyrics-container .lyrics-container {
+  width: 100%;
+  max-width: 1200px;
+  text-align: center;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.game-lyrics-container .lyrics-wrapper {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+}
+
+.game-lyrics-container .lyric-line {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+  padding: 1rem 2rem;
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+  line-height: 1.4;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.game-lyrics-container .lyric-line.current {
+  color: white;
+  font-size: 3rem;
+  text-shadow: 
+    0 0 20px rgba(255, 255, 255, 0.8),
+    0 4px 12px rgba(0, 0, 0, 0.9);
+  opacity: 1;
+  transform: translateY(0);
+  animation: fadeInCurrent 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeInCurrent {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.game-lyrics-container .lyric-line.next {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 2rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  opacity: 0.5;
+  transform: translateY(0);
+  animation: fadeInNext 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeInNext {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 0.5;
+    transform: translateY(0);
+  }
+}
+
+.game-pitch-detector {
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.game-pitch-detector .pitch-detector {
+  max-width: 400px;
+  width: 100%;
+}
+
+.loading-screen,
+.error-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+  gap: 2rem;
+  z-index: 1000;
+}
+
+.loading-screen h2 {
+  font-size: 3rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1rem;
+}
+
+.loading-subtitle {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.2rem;
+  margin-top: 1rem;
+}

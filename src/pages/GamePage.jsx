@@ -5,7 +5,7 @@ import Game from '../components/Game';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export default function GamePage() {
-  const { channel, title } = useParams();
+  const { channel, title: urlTitle } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const videoId = searchParams.get('id');
@@ -23,10 +23,18 @@ export default function GamePage() {
 
     const loadGame = async () => {
       try {
+        // Decode title and channel from URL
+        const title = decodeURIComponent(urlTitle || 'Unknown');
+        const artist = decodeURIComponent(channel || 'Unknown');
+        
         const response = await fetch(`${API_BASE_URL}/whisper`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ youtubeId: videoId }),
+          body: JSON.stringify({ 
+            youtubeId: videoId,
+            title: title !== 'Unknown' ? title : null,
+            artist: artist !== 'Unknown' ? artist : null,
+          }),
         });
 
         if (!response.ok) {
@@ -37,6 +45,10 @@ export default function GamePage() {
         const data = await response.json();
         setSegments(data.segments || []);
         setLyrics(data.lyrics || '');
+        
+        if (data.cached) {
+          console.log('✅ Loaded from cache - instant!');
+        }
       } catch (err) {
         setError(err.message);
         console.error('Error loading game:', err);

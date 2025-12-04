@@ -17,7 +17,6 @@ export default function Home() {
     }
 
     setSearching(true);
-    setError(null);
 
     try {
       const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);

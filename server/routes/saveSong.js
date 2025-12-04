@@ -12,7 +12,7 @@ router.post('/', async (req, res) => {
     }
 
     const { data, error } = await supabase
-      .from('songs')
+      .from('singfi_songs')
       .upsert({
         youtube_id: youtubeId,
         title: title || null,

@@ -3,6 +3,7 @@ import YouTube from 'react-youtube';
 import Lyrics from './Lyrics';
 import PitchDetector from './PitchDetector';
 import Score from './Score';
+import PitchBars from './PitchBars';
 
 export default function Game({ videoId, segments, lyrics, onBack }) {
   const [player, setPlayer] = useState(null);
@@ -28,21 +29,35 @@ export default function Game({ videoId, segments, lyrics, onBack }) {
     const playerInstance = event.target;
     setPlayer(playerInstance);
     
-    // Poll for current time every 100ms
+    // Poll for current time every 50ms for smoother updates
     const interval = setInterval(() => {
       try {
         if (playerInstance && typeof playerInstance.getCurrentTime === 'function') {
           const time = playerInstance.getCurrentTime();
-          if (typeof time === 'number' && !isNaN(time)) {
+          if (typeof time === 'number' && !isNaN(time) && time >= 0) {
             setCurrentTime(time);
           }
         }
       } catch (error) {
         console.error('Error getting current time:', error);
       }
-    }, 100);
+    }, 50);
     
     intervalRef.current = interval;
+  };
+
+  const handleStateChange = (event) => {
+    // Update time when state changes (playing, paused, etc.)
+    try {
+      if (event.target && typeof event.target.getCurrentTime === 'function') {
+        const time = event.target.getCurrentTime();
+        if (typeof time === 'number' && !isNaN(time) && time >= 0) {
+          setCurrentTime(time);
+        }
+      }
+    } catch (error) {
+      // Ignore errors
+    }
   };
 
   useEffect(() => {
@@ -69,6 +84,7 @@ export default function Game({ videoId, segments, lyrics, onBack }) {
           videoId={videoId}
           opts={opts}
           onReady={handleReady}
+          onStateChange={handleStateChange}
           className="game-youtube-player"
         />
       </div>
@@ -83,6 +99,15 @@ export default function Game({ videoId, segments, lyrics, onBack }) {
           <Score
             score={score}
             targetPitch={null}
+            userPitch={userPitch}
+          />
+        </div>
+
+        {/* Pitch Bars in Center */}
+        <div className="game-pitch-bars-container">
+          <PitchBars 
+            segments={segments} 
+            currentTime={currentTime} 
             userPitch={userPitch}
           />
         </div>

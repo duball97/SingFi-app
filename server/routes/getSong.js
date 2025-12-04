@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
     }
 
     const { data, error } = await supabase
-      .from('songs')
+      .from('singfi_songs')
       .select('*')
       .eq('youtube_id', youtubeId)
       .single();

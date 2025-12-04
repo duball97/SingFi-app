@@ -1,74 +1,81 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from "react";
 
 export default function Lyrics({ segments, currentTime }) {
-  if (!segments || segments.length === 0) {
-    return <div className="lyrics-container">No lyrics available</div>;
-  }
-
-  // Find the active segment based on current time
-  const { currentPhrase, nextPhrase } = useMemo(() => {
-    if (!segments || segments.length === 0) {
-      return { currentPhrase: null, nextPhrase: null };
+  const [displayedIdx, setDisplayedIdx] = useState(-1);
+  
+  const { currentIdx, current, next } = useMemo(() => {
+    if (!segments?.length || currentTime === undefined || currentTime === null) {
+      return { currentIdx: -1, current: null, next: null };
     }
 
-    if (currentTime === 0 || !currentTime) {
-      return { currentPhrase: segments[0] || null, nextPhrase: segments[1] || null };
-    }
-
-    // Find segment where currentTime is within start and end
-    let activeSegment = null;
-    let activeIndex = -1;
-
+    // Find the segment where currentTime is between start and end
+    let idx = -1;
+    
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
-      const start = typeof seg.start === 'number' ? seg.start : parseFloat(seg.start || 0);
-      const end = typeof seg.end === 'number' ? seg.end : parseFloat(seg.end || 0);
+      const start = Number(seg.start) || 0;
+      const end = Number(seg.end) || 0;
       
       if (currentTime >= start && currentTime <= end) {
-        activeSegment = seg;
-        activeIndex = i;
+        idx = i;
         break;
       }
     }
 
-    // If no active segment, find the one that should be playing (last segment that started)
-    if (!activeSegment) {
+    // If no exact match, find the last segment that has started
+    if (idx === -1) {
       for (let i = segments.length - 1; i >= 0; i--) {
-        const start = typeof segments[i].start === 'number' ? segments[i].start : parseFloat(segments[i].start || 0);
+        const start = Number(segments[i].start) || 0;
         if (currentTime >= start) {
-          activeSegment = segments[i];
-          activeIndex = i;
+          idx = i;
           break;
         }
       }
     }
 
-    // Fallback to first segment if still nothing
-    if (!activeSegment && segments.length > 0) {
-      activeSegment = segments[0];
-      activeIndex = 0;
+    // Default to first segment if nothing found
+    if (idx === -1) {
+      idx = 0;
     }
 
-    const nextIndex = activeIndex + 1;
-    const next = nextIndex < segments.length ? segments[nextIndex] : null;
-
-    return { currentPhrase: activeSegment, nextPhrase: next };
+    return {
+      currentIdx: idx,
+      current: segments[idx] || null,
+      next: segments[idx + 1] || null,
+    };
   }, [segments, currentTime]);
+
+  // Only update displayed content when segment index changes
+  useEffect(() => {
+    if (currentIdx !== displayedIdx && currentIdx !== -1) {
+      setDisplayedIdx(currentIdx);
+    }
+  }, [currentIdx, displayedIdx]);
+
+  // Use displayed segment for rendering to prevent flicker
+  const displayCurrent = displayedIdx >= 0 ? segments[displayedIdx] : current;
+  const displayNext = displayedIdx >= 0 ? segments[displayedIdx + 1] : next;
+
+  if (!displayCurrent) {
+    return null;
+  }
 
   return (
     <div className="lyrics-container">
-      <div className="lyrics-wrapper">
-        {currentPhrase && (
-          <div key={`current-${currentPhrase.id || currentPhrase.start}`} className="lyric-line current">
-            {currentPhrase.text}
-          </div>
-        )}
-        {nextPhrase && (
-          <div key={`next-${nextPhrase.id || nextPhrase.start}`} className="lyric-line next">
-            {nextPhrase.text}
-          </div>
-        )}
+      <div 
+        key={`line-${displayedIdx}`}
+        className="lyric-line current"
+      >
+        {displayCurrent.text || ''}
       </div>
+      {displayNext && (
+        <div 
+          key={`line-${displayedIdx + 1}`}
+          className="lyric-line next"
+        >
+          {displayNext.text || ''}
+        </div>
+      )}
     </div>
   );
 }

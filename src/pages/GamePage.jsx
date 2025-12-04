@@ -12,8 +12,31 @@ export default function GamePage() {
   
   const [segments, setSegments] = useState([]);
   const [lyrics, setLyrics] = useState('');
+  const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadingMessage, setLoadingMessage] = useState('Downloading audio...');
+
+  // Animated loading messages that cycle
+  useEffect(() => {
+    if (!loading) return;
+    
+    const messages = [
+      'Downloading audio...',
+      'Separating vocals...',
+      'Transcribing lyrics...',
+      'Extracting pitch...',
+      'Almost ready...'
+    ];
+    
+    let messageIndex = 0;
+    const interval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % messages.length;
+      setLoadingMessage(messages[messageIndex]);
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [loading]);
 
   useEffect(() => {
     if (!videoId) {
@@ -21,8 +44,17 @@ export default function GamePage() {
       return;
     }
 
+    // Prevent double requests (React Strict Mode, double-click, etc.)
+    const lockKey = `__songLoading_${videoId}`;
+    if (window[lockKey]) {
+      console.log('⏳ Request already in progress, skipping duplicate...');
+      return;
+    }
+
     const loadGame = async () => {
       try {
+        window[lockKey] = true;
+        
         // Decode title and channel from URL
         const title = decodeURIComponent(urlTitle || 'Unknown');
         const artist = decodeURIComponent(channel || 'Unknown');
@@ -45,20 +77,25 @@ export default function GamePage() {
         const data = await response.json();
         setSegments(data.segments || []);
         setLyrics(data.lyrics || '');
+        setNotes(data.notes || null);
         
         if (data.cached) {
           console.log('✅ Loaded from cache - instant!');
+        }
+        if (data.notes) {
+          console.log('🎵 Real pitch notes loaded:', data.notes.length);
         }
       } catch (err) {
         setError(err.message);
         console.error('Error loading game:', err);
       } finally {
         setLoading(false);
+        delete window[lockKey];
       }
     };
 
     loadGame();
-  }, [videoId, navigate]);
+  }, [videoId, navigate, urlTitle, channel]);
 
   const handleBack = () => {
     navigate('/');
@@ -68,9 +105,33 @@ export default function GamePage() {
     return (
       <div className="game-page">
         <div className="loading-screen">
-          <h2>🎤 Processing Song...</h2>
-          <div className="loading">Running Whisper transcription...</div>
-          <div className="loading-subtitle">This may take a moment</div>
+          {/* YouTube video background */}
+          {videoId && (
+            <iframe
+              className="loading-video-bg"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
+              frameBorder="0"
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+              title="Loading background"
+            />
+          )}
+          
+          {/* Overlay gradient */}
+          <div className="loading-overlay"></div>
+          
+          {/* Content */}
+          <div className="loading-content">
+            <h2>🎤 Processing Song...</h2>
+            <div className="loading-message">
+              <span className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+              {loadingMessage}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -94,6 +155,7 @@ export default function GamePage() {
       videoId={videoId}
       segments={segments}
       lyrics={lyrics}
+      notes={notes}
       onBack={handleBack}
     />
   );

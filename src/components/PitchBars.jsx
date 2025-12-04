@@ -1,11 +1,24 @@
 import { useMemo } from 'react';
 
-export default function PitchBars({ segments, currentTime, userPitch }) {
-  // Generate pitch bars from segments
-  // For now, we'll create bars based on segment timing
-  // Later this can be replaced with actual pitch data from audio analysis
+export default function PitchBars({ segments, currentTime, userPitch, notes }) {
+  // Use real notes if available, otherwise generate synthetic bars from segments
   const pitchBars = useMemo(() => {
+    // If we have real notes from pitch extraction, use those!
+    if (notes && Array.isArray(notes) && notes.length > 0) {
+      console.log('🎵 Using REAL pitch notes:', notes.length);
+      return notes.map((note, index) => ({
+        id: `note-${index}`,
+        start: note.start,
+        end: note.end,
+        duration: note.duration || (note.end - note.start),
+        targetPitch: note.targetPitch,
+        segmentIndex: -1, // Notes don't map to segments
+      }));
+    }
+
+    // Fallback: Generate synthetic bars from segments (old method)
     if (!segments || segments.length === 0) return [];
+    console.log('⚠️ No real notes available, generating synthetic bars from segments');
 
     const bars = [];
     let firstSingingStart = null;
@@ -38,43 +51,81 @@ export default function PitchBars({ segments, currentTime, userPitch }) {
         return;
       }
 
-      // Generate bars based on duration (one bar per 0.3-0.8 seconds, varying)
-      const barInterval = 0.4 + (index % 3) * 0.15; // Varies between 0.4-0.7s
-      const barCount = Math.max(1, Math.floor(duration / barInterval));
+      // Generate bars with varied lengths like SingStar
+      // Strategy: Create a mix of short, medium, and long notes
+      // Short notes: 0.2-0.5s (quick syllables)
+      // Medium notes: 0.6-1.2s (normal words)
+      // Long notes: 1.5-3.0s (held notes, vowels)
       
-      for (let i = 0; i < barCount; i++) {
-        const barStart = start + (i * barInterval);
-        const barEnd = Math.min(barStart + barInterval, end);
-        const barDuration = barEnd - barStart;
+      let currentPos = start;
+      let barIndex = 0;
+      
+      while (currentPos < end) {
+        // Determine note length based on position in segment - DETERMINISTIC (no Math.random)
+        // Use a pattern: some short, some medium, some long
+        const noteType = (index + barIndex) % 5;
+        let barDuration;
+        
+        // Use deterministic pseudo-random based on index and barIndex
+        const seed = (index * 1000 + barIndex * 100) % 1000;
+        const pseudoRandom = seed / 1000; // 0 to 1
+        
+        if (noteType === 0 || noteType === 1) {
+          // Short notes (40% of bars) - 0.2 to 0.5s
+          barDuration = 0.2 + (pseudoRandom * 0.3);
+        } else if (noteType === 2 || noteType === 3) {
+          // Medium notes (40% of bars) - 0.6 to 1.2s
+          barDuration = 0.6 + (pseudoRandom * 0.6);
+        } else {
+          // Long notes (20% of bars) - 1.5 to 2.5s
+          barDuration = 1.5 + (pseudoRandom * 1.0);
+        }
+        
+        // Don't exceed segment end
+        const barStart = currentPos;
+        const barEnd = Math.min(currentPos + barDuration, end);
+        const actualDuration = barEnd - barStart;
+        
+        // Skip if bar is too short (less than 0.15s)
+        if (actualDuration < 0.15) {
+          currentPos = end;
+          continue;
+        }
         
         // Generate varied target pitch (Hz) - typical singing range is 100-600 Hz
         // Create more variation using multiple sine waves
         const basePitch = 250 + (index % 7) * 40; // Base varies 250-490 Hz
-        const wave1 = Math.sin((index * 0.7 + i * 0.3)) * 80;
-        const wave2 = Math.cos((index * 0.5 + i * 0.2)) * 50;
+        const wave1 = Math.sin((index * 0.7 + barIndex * 0.3)) * 80;
+        const wave2 = Math.cos((index * 0.5 + barIndex * 0.2)) * 50;
         const variation = wave1 + wave2;
         const targetPitch = basePitch + variation;
 
         bars.push({
-          id: `${index}-${i}`,
+          id: `${index}-${barIndex}`,
           start: barStart,
           end: barEnd,
-          duration: barDuration,
+          duration: actualDuration,
           targetPitch: Math.max(100, Math.min(600, targetPitch)),
           segmentIndex: index,
         });
+        
+        currentPos = barEnd;
+        barIndex++;
       }
     });
 
     return bars;
   }, [segments]);
 
-  // Find bars that should be visible (current time ± 3 seconds ahead, 1 second behind)
+  // Find bars that should be visible (current time + 4 seconds ahead, 2 seconds behind)
   const visibleBars = useMemo(() => {
-    if (!currentTime) return [];
+    if (!currentTime || currentTime === 0) {
+      // If no currentTime, show first 20 bars
+      return pitchBars.slice(0, 20);
+    }
     
-    const windowStart = currentTime - 1;
-    const windowEnd = currentTime + 3;
+    const windowStart = currentTime - 2; // Show bars 2s past center
+    const windowEnd = currentTime + 4; // Show bars 4s ahead
     
     return pitchBars.filter(bar => bar.start <= windowEnd && bar.end >= windowStart);
   }, [pitchBars, currentTime]);
@@ -102,21 +153,46 @@ export default function PitchBars({ segments, currentTime, userPitch }) {
   }, [activeBar, userPitch]);
 
   // Calculate position of bar (0-100% from right to left)
-  // Bars start at 100% (right) and move to 0% (left)
-  // Center line is at 50%
+  // Bars start at 100% (right) and move to left, passing center at 50%, continuing to ~20%
+  // Center line is at 50% - this is where user should match
   const getBarPosition = (bar) => {
-    if (!currentTime) return 100;
+    if (!currentTime || currentTime === 0) {
+      // If no currentTime, position bars based on their start time relative to visible bars
+      if (visibleBars.length === 0) {
+        // Fallback: use all pitchBars if visibleBars is empty
+        if (pitchBars.length === 0) return 100;
+        const firstBarStart = pitchBars[0]?.start || bar.start;
+        const lastBarStart = pitchBars[pitchBars.length - 1]?.start || bar.start;
+        const timeRange = Math.max(6, lastBarStart - firstBarStart);
+        const timeDiff = bar.start - firstBarStart;
+        const normalized = Math.min(1, Math.max(0, timeDiff / timeRange));
+        return 100 - (normalized * 80);
+      }
+      const firstBarStart = visibleBars[0]?.start || bar.start;
+      const lastBarStart = visibleBars[visibleBars.length - 1]?.start || bar.start;
+      const timeRange = Math.max(6, lastBarStart - firstBarStart); // At least 6 second window
+      const timeDiff = bar.start - firstBarStart;
+      // Position bars from right (100%) to left (20%) based on their relative start times
+      // Bars that start later appear more to the right
+      const normalized = Math.min(1, Math.max(0, timeDiff / timeRange));
+      return 100 - (normalized * 80); // 100% (right) to 20% (left)
+    }
     
     const timeDiff = bar.start - currentTime;
-    // Bars appear 3 seconds ahead and disappear 1 second after
-    const lookAhead = 3;
-    const lookBehind = 1;
+    // Bars appear 4 seconds ahead and disappear 2 seconds after passing center
+    const lookAhead = 4; // How far ahead bars appear (right side)
+    const lookBehind = 2; // How far past center bars continue (left side)
     const totalWindow = lookAhead + lookBehind;
     
-    // Position: 100% when 3s ahead, 0% when 1s past
-    const position = ((timeDiff + lookAhead) / totalWindow) * 100;
+    // Position calculation:
+    // When bar.start is 4s ahead of currentTime → position = 100% (right edge)
+    // When bar.start equals currentTime → position = 50% (center line)
+    // When bar.start is 2s past currentTime → position = 20% (left, past center)
+    // Position: 100% when 4s ahead, 50% when at current time, 20% when 2s past
+    const normalizedTime = (timeDiff + lookAhead) / totalWindow;
+    const position = 20 + (normalizedTime * 80); // Maps to 20% (left) to 100% (right)
     
-    return Math.max(-10, Math.min(110, position)); // Allow slight overflow for smooth entry/exit
+    return Math.max(-5, Math.min(105, position)); // Allow slight overflow for smooth entry/exit
   };
 
   return (
@@ -131,20 +207,52 @@ export default function PitchBars({ segments, currentTime, userPitch }) {
           const isActive = activeBar?.id === bar.id;
           const isHit = isActive && userPitch && accuracy > 70;
           
-          // Calculate bar height based on target pitch (normalize to 0-100%)
-          // Higher pitch = taller bar from center
-          const pitchHeight = ((bar.targetPitch - 100) / (600 - 100)) * 100;
-          const barHeight = Math.max(20, Math.min(70, pitchHeight));
+          // Calculate bar height (fixed size, doesn't change with pitch)
+          const barHeight = 40; // Fixed height in pixels
           
           // Calculate bar width based on duration (longer = wider)
-          // Base width 70px, scales with duration (0.3s = 70px, 0.8s = 140px)
-          const baseWidth = 70;
-          const widthMultiplier = 0.4 + (bar.duration || 0.4) * 0.6;
-          const barWidth = Math.max(60, Math.min(140, baseWidth * widthMultiplier));
+          // Short notes (0.2-0.5s): 50-70px
+          // Medium notes (0.6-1.2s): 80-120px
+          // Long notes (1.5-2.5s): 130-180px
+          let barWidth;
+          if (bar.duration < 0.5) {
+            // Short note
+            barWidth = 50 + (bar.duration / 0.5) * 20; // 50-70px
+          } else if (bar.duration < 1.2) {
+            // Medium note
+            barWidth = 80 + ((bar.duration - 0.5) / 0.7) * 40; // 80-120px
+          } else {
+            // Long note
+            barWidth = 130 + ((bar.duration - 1.2) / 1.3) * 50; // 130-180px
+          }
+          barWidth = Math.max(50, Math.min(180, barWidth));
           
-          // Position bar vertically (centered on center line, extending equally up and down)
-          // Center line is at 50%, so bar should be centered there
-          const barBottom = 50 - (barHeight / 2);
+          // Position bar vertically based on pitch
+          // Higher pitch = higher position (lower top value), lower pitch = lower position (higher top value)
+          // Pitch range: 100-600 Hz
+          // Track height: 300px
+          // Position range: 30px (top/high pitch) to 260px (bottom/low pitch)
+          // Center line at 150px represents ~350 Hz (middle of range)
+          const minPitch = 100;
+          const maxPitch = 600;
+          const pitchRange = maxPitch - minPitch;
+          const trackHeight = 300;
+          const topMargin = 30; // Space from top
+          const bottomMargin = 30; // Space from bottom
+          const usableHeight = trackHeight - topMargin - bottomMargin;
+          
+          // Ensure targetPitch is within valid range
+          const clampedPitch = Math.max(minPitch, Math.min(maxPitch, bar.targetPitch || 350));
+          
+          // Higher pitch = lower top value (higher on screen)
+          // 600 Hz (high) = 30px (top), 100 Hz (low) = 270px (bottom)
+          const pitchPercent = (clampedPitch - minPitch) / pitchRange;
+          const topPosition = trackHeight - bottomMargin - (pitchPercent * usableHeight) - (barHeight / 2);
+          
+          // Debug log for first few bars (only once per render)
+          if (visibleBars.indexOf(bar) < 3 && Math.random() < 0.01) {
+            console.log(`Bar ${bar.id}: start=${bar.start.toFixed(2)}s, currentTime=${currentTime?.toFixed(2) || '0'}s, pitch=${clampedPitch.toFixed(0)}Hz, left=${position.toFixed(1)}%, top=${topPosition.toFixed(1)}px`);
+          }
 
           return (
             <div
@@ -152,8 +260,8 @@ export default function PitchBars({ segments, currentTime, userPitch }) {
               className={`pitch-bar ${isActive ? 'active' : ''} ${isHit ? 'hit' : ''}`}
               style={{
                 left: `${position}%`,
-                height: `${barHeight}%`,
-                bottom: `${barBottom}%`,
+                top: `${topPosition}px`,
+                height: `${barHeight}px`,
                 width: `${barWidth}px`,
               }}
             >

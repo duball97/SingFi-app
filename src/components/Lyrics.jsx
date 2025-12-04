@@ -1,79 +1,86 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 
 export default function Lyrics({ segments, currentTime }) {
+  const lastIdxRef = useRef(-1);
   const [displayedIdx, setDisplayedIdx] = useState(-1);
+  const segmentsLoggedRef = useRef(false);
   
-  const { currentIdx, current, next } = useMemo(() => {
+  // Log all segments once when they're loaded
+  useEffect(() => {
+    if (segments?.length && !segmentsLoggedRef.current) {
+      console.log('🎵 ALL SEGMENTS WITH TIMES:');
+      segments.forEach((seg, idx) => {
+        const start = Number(seg.start) || 0;
+        const end = Number(seg.end) || 0;
+        console.log(`  [${idx}] ${start.toFixed(2)}s - ${end.toFixed(2)}s (${(end - start).toFixed(2)}s): "${seg.text}"`);
+      });
+      segmentsLoggedRef.current = true;
+    }
+  }, [segments]);
+  
+  // Only calculate the INDEX, not the full objects
+  const currentIdx = useMemo(() => {
     if (!segments?.length || currentTime === undefined || currentTime === null) {
-      return { currentIdx: -1, current: null, next: null };
+      return -1;
     }
 
     // Find the segment where currentTime is between start and end
-    let idx = -1;
-    
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
       
       if (currentTime >= start && currentTime <= end) {
-        idx = i;
-        break;
+        return i;
       }
     }
 
     // If no exact match, find the last segment that has started
-    if (idx === -1) {
-      for (let i = segments.length - 1; i >= 0; i--) {
-        const start = Number(segments[i].start) || 0;
-        if (currentTime >= start) {
-          idx = i;
-          break;
-        }
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const start = Number(segments[i].start) || 0;
+      if (currentTime >= start) {
+        return i;
       }
     }
 
-    // Default to first segment if nothing found
-    if (idx === -1) {
-      idx = 0;
-    }
-
-    return {
-      currentIdx: idx,
-      current: segments[idx] || null,
-      next: segments[idx + 1] || null,
-    };
+    return 0;
   }, [segments, currentTime]);
 
-  // Only update displayed content when segment index changes
+  // Only update state when index actually changes, and log here
   useEffect(() => {
-    if (currentIdx !== displayedIdx && currentIdx !== -1) {
+    if (currentIdx !== lastIdxRef.current && currentIdx !== -1) {
+      const seg = segments[currentIdx];
+      const start = Number(seg.start) || 0;
+      const end = Number(seg.end) || 0;
+      console.log(`✅ SEGMENT CHANGE: Time ${currentTime.toFixed(2)}s → Segment [${currentIdx}] (${start.toFixed(2)}s - ${end.toFixed(2)}s): "${seg.text}"`);
+      
+      lastIdxRef.current = currentIdx;
       setDisplayedIdx(currentIdx);
     }
-  }, [currentIdx, displayedIdx]);
+  }, [currentIdx, currentTime, segments]);
 
-  // Use displayed segment for rendering to prevent flicker
-  const displayCurrent = displayedIdx >= 0 ? segments[displayedIdx] : current;
-  const displayNext = displayedIdx >= 0 ? segments[displayedIdx + 1] : next;
+  // Get segments directly from array using displayedIdx
+  const current = displayedIdx >= 0 && segments[displayedIdx] ? segments[displayedIdx] : null;
+  const next = displayedIdx >= 0 && segments[displayedIdx + 1] ? segments[displayedIdx + 1] : null;
 
-  if (!displayCurrent) {
+  if (!current) {
     return null;
   }
 
   return (
     <div className="lyrics-container">
       <div 
-        key={`line-${displayedIdx}`}
+        key={`current-${displayedIdx}`}
         className="lyric-line current"
       >
-        {displayCurrent.text || ''}
+        {current.text || ''}
       </div>
-      {displayNext && (
+      {next && (
         <div 
-          key={`line-${displayedIdx + 1}`}
+          key={`next-${displayedIdx + 1}`}
           className="lyric-line next"
         >
-          {displayNext.text || ''}
+          {next.text || ''}
         </div>
       )}
     </div>

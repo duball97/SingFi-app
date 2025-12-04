@@ -9,6 +9,9 @@ create table singfi_songs (
   lyrics text, -- Full Whisper transcription as single text block
   segments jsonb, -- Whisper's timestamped segments array
   notes jsonb, -- SingStar note chart for pitch bars (optional, for future use)
+  vocals text, -- Path to vocals file in Supabase Storage (e.g., "youtubeId.wav")
+  thumbnail text, -- Path to thumbnail in Supabase Storage or YouTube URL
+  owner uuid, -- User UUID for Row-Level Security (null = public/shared)
   created_at timestamp default now()
 );
 

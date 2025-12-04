@@ -5,12 +5,17 @@ import PitchDetector from './PitchDetector';
 import Score from './Score';
 import PitchBars from './PitchBars';
 
-export default function Game({ videoId, segments, lyrics, onBack }) {
+export default function Game({ videoId, segments, lyrics, notes, onBack }) {
   const [player, setPlayer] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [userPitch, setUserPitch] = useState(null);
   const [score, setScore] = useState(0);
-  const intervalRef = useRef(null);
+  
+  // Custom timer refs
+  const playbackStartTimeRef = useRef(null);
+  const pauseOffsetRef = useRef(0);
+  const isPlayingRef = useRef(false);
+  const animationFrameRef = useRef(null);
 
   const opts = {
     height: '100%',
@@ -29,41 +34,92 @@ export default function Game({ videoId, segments, lyrics, onBack }) {
     const playerInstance = event.target;
     setPlayer(playerInstance);
     
-    // Poll for current time every 50ms for smoother updates
-    const interval = setInterval(() => {
-      try {
-        if (playerInstance && typeof playerInstance.getCurrentTime === 'function') {
-          const time = playerInstance.getCurrentTime();
-          if (typeof time === 'number' && !isNaN(time) && time >= 0) {
-            setCurrentTime(time);
-          }
-        }
-      } catch (error) {
-        console.error('Error getting current time:', error);
-      }
-    }, 50);
-    
-    intervalRef.current = interval;
-  };
-
-  const handleStateChange = (event) => {
-    // Update time when state changes (playing, paused, etc.)
+    // Ensure video starts playing (autoplay might be blocked)
     try {
-      if (event.target && typeof event.target.getCurrentTime === 'function') {
-        const time = event.target.getCurrentTime();
-        if (typeof time === 'number' && !isNaN(time) && time >= 0) {
-          setCurrentTime(time);
-        }
-      }
+      playerInstance.playVideo();
+      console.log('▶️ Video ready, attempting to play...');
     } catch (error) {
-      // Ignore errors
+      console.error('Error starting video:', error);
     }
   };
 
+  const handleStateChange = (event) => {
+    const state = event.data;
+    const playerInstance = event.target;
+
+    console.log(`📺 YouTube state changed: ${state} (1=playing, 2=paused, 3=buffering, 0=ended, -1=unstarted)`);
+
+    if (state === -1) { // UNSTARTED
+      // Video hasn't started, try to play it
+      try {
+        playerInstance.playVideo();
+        console.log('▶️ Attempting to start unstarted video...');
+      } catch (error) {
+        console.error('Error playing unstarted video:', error);
+      }
+    }
+
+    if (state === 1) { // PLAYING
+      isPlayingRef.current = true;
+      
+      try {
+        // Sync timer with YouTube's actual time on play
+        const ytTime = playerInstance.getCurrentTime();
+        if (typeof ytTime === 'number' && !isNaN(ytTime) && ytTime >= 0) {
+          // Reset timer based on YouTube's current position
+          playbackStartTimeRef.current = performance.now() - (ytTime * 1000);
+          pauseOffsetRef.current = 0;
+          console.log(`▶️ PLAY: Synced timer to YouTube time ${ytTime.toFixed(2)}s`);
+        } else {
+          // If YouTube time is invalid, start from 0
+          playbackStartTimeRef.current = performance.now();
+          pauseOffsetRef.current = 0;
+          console.log(`▶️ PLAY: Started timer from 0`);
+        }
+      } catch (error) {
+        console.error('Error syncing timer:', error);
+        // Fallback: start timer from now
+        playbackStartTimeRef.current = performance.now();
+        pauseOffsetRef.current = 0;
+      }
+    }
+
+    if (state === 2) { // PAUSED
+      isPlayingRef.current = false;
+      if (playbackStartTimeRef.current !== null) {
+        pauseOffsetRef.current = performance.now() - playbackStartTimeRef.current;
+        console.log(`⏸️ PAUSE: Timer paused at ${(pauseOffsetRef.current / 1000).toFixed(2)}s`);
+      }
+    }
+
+    if (state === 0) { // ENDED
+      isPlayingRef.current = false;
+      console.log(`⏹️ ENDED: Video finished`);
+    }
+
+    if (state === 3) { // BUFFERING
+      // Don't update timer during buffering
+      return;
+    }
+  };
+
+  // Custom high-precision timer using requestAnimationFrame
   useEffect(() => {
+    const tick = () => {
+      if (isPlayingRef.current && playbackStartTimeRef.current !== null) {
+        const now = performance.now();
+        const elapsed = (now - playbackStartTimeRef.current) / 1000; // convert to seconds
+        setCurrentTime(elapsed);
+      }
+
+      animationFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(tick);
+
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
     };
   }, []);
@@ -109,6 +165,7 @@ export default function Game({ videoId, segments, lyrics, onBack }) {
             segments={segments} 
             currentTime={currentTime} 
             userPitch={userPitch}
+            notes={notes}
           />
         </div>
 

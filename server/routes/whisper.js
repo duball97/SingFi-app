@@ -2,10 +2,23 @@ import express from "express";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { tmpdir } from "os";
-import { join } from "path";
+import { join, dirname } from "path";
 import fs from "fs";
 import { supabase } from "../services/supabase.js";
 import OpenAI from "openai";
+import { Innertube } from "youtubei.js";
+import { separateVocals } from "../services/vocalSeparation.js";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Create vocals directory if it doesn't exist
+const vocalsDir = join(__dirname, '../vocals');
+if (!fs.existsSync(vocalsDir)) {
+  fs.mkdirSync(vocalsDir, { recursive: true });
+  console.log('📁 Created vocals directory:', vocalsDir);
+}
 
 const execAsync = promisify(exec);
 const router = express.Router();
@@ -53,90 +66,16 @@ async function youtubeToWavBuffer(youtubeUrl) {
 }
 
 // STEP 3 — Group segments into proper verse lines using AI
-async function groupSegmentsIntoVerses(rawSegments, fullText, openai) {
-  if (!rawSegments || rawSegments.length === 0) {
-    return [];
-  }
-
-  try {
-    // Create a prompt that asks AI to group segments into verse lines
-    // Each line should contain about 2 sentences, similar to how lyrics are displayed
-    const prompt = `You are a lyrics formatting assistant. I have a song transcription with timestamped segments. 
-
-Raw transcription text:
-"${fullText}"
-
-Segment data (first 10 segments as example):
-${JSON.stringify(rawSegments.slice(0, 10), null, 2)}
-
-Please analyze ALL segments and group them into verse lines. Each verse line should:
-1. Contain approximately 2 sentences or phrases (like typical song lyrics)
-2. Preserve the timing information (use the start time of the first segment and end time of the last segment in each group)
-3. Combine the text from grouped segments into a single line
-4. Maintain natural lyric flow and phrasing
-
-Return a JSON array where each object has:
-- "text": the combined text for this verse line
-- "start": the start timestamp (number)
-- "end": the end timestamp (number)
-
-Example format:
-[
-  {"text": "When you were here before Couldn't look you in the eye", "start": 0.0, "end": 5.2},
-  {"text": "You're just like an angel Your skin makes me cry", "start": 5.2, "end": 10.5}
-]
-
-Return ONLY the JSON array, no other text.`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a lyrics formatting assistant. Always return valid JSON arrays only."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.3,
-    });
-
-    const responseText = completion.choices[0].message.content.trim();
-    
-    // Try to extract JSON from the response (in case there's extra text)
-    let jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const verseLines = JSON.parse(jsonMatch[0]);
-      console.log(`✅ AI grouped ${rawSegments.length} segments into ${verseLines.length} verse lines`);
-      return verseLines;
-    } else {
-      // Fallback: try parsing the whole response
-      const verseLines = JSON.parse(responseText);
-      return verseLines;
-    }
-  } catch (error) {
-    console.error("Error processing segments with AI:", error);
-    console.log("Falling back to original segments");
-    // Fallback: return original segments if AI processing fails
-    return rawSegments.map(seg => ({
-      text: seg.text || "",
-      start: seg.start || 0,
-      end: seg.end || 0,
-    }));
-  }
-}
-
 router.post("/", async (req, res) => {
   try {
-    const { youtubeId, title, artist } = req.body;
+    const { youtubeId, title, artist, owner } = req.body;
 
     if (!youtubeId)
       return res.status(400).json({ error: "youtubeId required" });
 
-    // Check cache first
-    const { data: cached } = await supabase
+    // Check cache first (RLS policies will filter based on owner)
+    // Note: If using RLS, ensure policies allow public access OR use service role key
+    const { data: cached, error: cacheError } = await supabase
       .from("singfi_songs")
       .select("*")
       .eq("youtube_id", youtubeId)
@@ -149,13 +88,84 @@ router.post("/", async (req, res) => {
         cached: true,
         segments: cached.segments,
         lyrics: cached.lyrics,
+        notes: cached.notes || null,
         title: cached.title,
         artist: cached.artist,
+        thumbnail: cached.thumbnail || null,
       });
+    }
+    
+    // If cache check failed due to RLS (not found), continue processing
+    if (cacheError && cacheError.code !== 'PGRST116') {
+      console.warn('⚠️ Cache check error (continuing anyway):', cacheError.message);
     }
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
     console.log("Processing:", youtubeUrl);
+
+    // Get YouTube thumbnail using standard URL pattern (no API needed)
+    let thumbnailStoragePath = null;
+    try {
+      console.log("📸 Fetching YouTube thumbnail...");
+      // Use standard YouTube thumbnail URL pattern (maxresdefault is highest quality)
+      const thumbnailUrl = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`;
+      
+      console.log("📸 Thumbnail URL:", thumbnailUrl);
+      
+      // Download thumbnail
+      const thumbnailResponse = await fetch(thumbnailUrl);
+      if (thumbnailResponse.ok) {
+        const thumbnailBuffer = Buffer.from(await thumbnailResponse.arrayBuffer());
+        thumbnailStoragePath = `thumbnails/${youtubeId}.jpg`;
+        
+        // Upload to Supabase Storage
+        console.log(`💾 Uploading thumbnail to Supabase Storage: ${thumbnailStoragePath}`);
+        const { error: thumbUploadError } = await supabase
+          .storage
+          .from('thumbnails')
+          .upload(thumbnailStoragePath, thumbnailBuffer, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+        
+        if (thumbUploadError) {
+          console.warn('⚠️ Failed to upload thumbnail to storage:', thumbUploadError.message);
+          thumbnailStoragePath = thumbnailUrl; // Fallback to direct URL
+        } else {
+          console.log(`✅ Thumbnail saved to storage: ${(thumbnailBuffer.length / 1024).toFixed(2)}KB`);
+        }
+      } else {
+        // Try hqdefault if maxresdefault fails (some videos don't have maxresdefault)
+        console.log("📸 maxresdefault not available, trying hqdefault...");
+        const hqThumbnailUrl = `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+        const hqResponse = await fetch(hqThumbnailUrl);
+        if (hqResponse.ok) {
+          const thumbnailBuffer = Buffer.from(await hqResponse.arrayBuffer());
+          thumbnailStoragePath = `thumbnails/${youtubeId}.jpg`;
+          
+          const { error: thumbUploadError } = await supabase
+            .storage
+            .from('thumbnails')
+            .upload(thumbnailStoragePath, thumbnailBuffer, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+          
+          if (thumbUploadError) {
+            console.warn('⚠️ Failed to upload thumbnail to storage:', thumbUploadError.message);
+            thumbnailStoragePath = hqThumbnailUrl;
+          } else {
+            console.log(`✅ Thumbnail saved to storage: ${(thumbnailBuffer.length / 1024).toFixed(2)}KB`);
+          }
+        } else {
+          console.warn('⚠️ Failed to download thumbnail, using direct URL');
+          thumbnailStoragePath = thumbnailUrl; // Fallback to direct URL
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Error fetching thumbnail:', error.message);
+      thumbnailStoragePath = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`; // Fallback
+    }
 
     // Download + convert
     const wavBuffer = await youtubeToWavBuffer(youtubeUrl);
@@ -165,15 +175,16 @@ router.post("/", async (req, res) => {
       "MB"
     );
 
-    // STEP 2 — Send WAV buffer to OpenAI Whisper
-    console.log("Sending to OpenAI Whisper...");
-
     const openai = getOpenAI();
+
+    // STEP 2 — Run Whisper transcription (vocals are handled separately)
+    console.log("🎤 Running Whisper transcription...");
     const transcription = await openai.audio.transcriptions.create({
       file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
       model: "whisper-1",
       response_format: "verbose_json", // gives segments + text
     });
+    console.log("✅ Whisper transcription complete");
 
     const segments = transcription.segments || [];
     const fullText = transcription.text || "";
@@ -184,15 +195,84 @@ router.post("/", async (req, res) => {
     console.log('First 5 segments:', JSON.stringify(segments.slice(0, 5), null, 2));
     console.log('Full text:', fullText);
 
-    // STEP 3 — Use AI to group segments into proper verse lines
-    console.log("Processing segments into verse lines with AI...");
-    const processedSegments = await groupSegmentsIntoVerses(segments, fullText, openai);
+    // STEP 3 — Process vocals (in parallel with AI processing if possible, or after)
+    console.log("🎤 Processing vocals...");
+    const vocalsStoragePath = `${youtubeId}.wav`;
+    let vocalsProcessed = false;
     
-    console.log('📝 PROCESSED VERSE SEGMENTS:');
-    console.log('Total verse lines:', processedSegments.length);
-    console.log('First 5 verse lines:', JSON.stringify(processedSegments.slice(0, 5), null, 2));
+    try {
+      // Check if vocals already exist in Supabase Storage
+      console.log(`🔍 Checking for existing vocals in storage: ${vocalsStoragePath}`);
+      const { data: existingFile, error: downloadError } = await supabase
+        .storage
+        .from('vocals')
+        .download(vocalsStoragePath);
+      
+      if (existingFile && !downloadError) {
+        console.log('✅ Found existing vocals in storage');
+        vocalsProcessed = true;
+      } else {
+        throw new Error('Vocals not found in storage');
+      }
+    } catch (error) {
+      console.log('📝 Vocals not in storage, processing with Replicate...');
+      
+      // Process vocals with Replicate Demucs
+      const vocalsResult = await separateVocals(wavBuffer, youtubeId).catch((error) => {
+        console.warn("⚠️ Vocal separation failed:", error.message);
+        return null;
+      });
+      
+      if (vocalsResult && vocalsResult.vocals) {
+        const vocalsBuffer = vocalsResult.vocals;
+        console.log("✅ Vocals isolated successfully");
+        
+        // Save vocals locally for testing
+        const localFilePath = join(vocalsDir, `${youtubeId}.wav`);
+        try {
+          fs.writeFileSync(localFilePath, vocalsBuffer);
+          console.log(`💾 Saved vocals locally: ${localFilePath} (${(vocalsBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
+        } catch (localError) {
+          console.warn('⚠️ Failed to save vocals locally:', localError.message);
+        }
+        
+        // Upload vocals to Supabase Storage
+        console.log(`💾 Uploading vocals to Supabase Storage: ${vocalsStoragePath}`);
+        try {
+          const { data: uploadData, error: uploadError } = await supabase
+            .storage
+            .from('vocals')
+            .upload(vocalsStoragePath, vocalsBuffer, {
+              contentType: 'audio/wav',
+              upsert: true
+            });
+          
+          if (uploadError) {
+            console.error('❌ Supabase Storage upload error:', uploadError);
+            console.warn('⚠️ Vocals saved locally but NOT to Supabase Storage');
+          } else {
+            console.log(`✅ Vocals saved to Supabase Storage: ${(vocalsBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+            vocalsProcessed = true;
+          }
+        } catch (storageError) {
+          console.error('❌ Supabase Storage exception:', storageError);
+          console.warn('⚠️ Vocals saved locally but NOT to Supabase Storage');
+        }
+      }
+    }
 
-    // Save in Supabase with all fields
+    // STEP 4 — Use raw Whisper segments directly (no AI processing)
+    const rawSegments = segments.map(seg => ({
+      text: seg.text || "",
+      start: seg.start || 0,
+      end: seg.end || 0,
+    }));
+    
+    console.log('📝 RAW WHISPER SEGMENTS:');
+    console.log('Total segments:', rawSegments.length);
+    console.log('First 5 segments:', JSON.stringify(rawSegments.slice(0, 5), null, 2));
+
+    // Save in Supabase with lyrics and segments (vocals and notes handled separately)
     await supabase
       .from("singfi_songs")
       .upsert(
@@ -201,20 +281,27 @@ router.post("/", async (req, res) => {
           title: title || null,
           artist: artist || null,
           lyrics: fullText,
-          segments: processedSegments, // Use processed verse lines instead of raw segments
-          notes: null, // Will be populated later for pitch bars
+          segments: rawSegments, // Use raw Whisper segments
+          notes: null, // Notes extracted separately via vocals route
+          vocals: vocalsProcessed ? vocalsStoragePath : null, // Vocals path in Storage
+          thumbnail: thumbnailStoragePath, // Thumbnail path in Storage or YouTube URL
+          owner: owner || null, // User UUID for RLS (optional for now)
         },
         { onConflict: "youtube_id" }
       );
 
-    console.log('✅ Game ready! Verse lines:', processedSegments.length, 'Lyrics length:', fullText.length);
+    console.log(`💾 Saved lyrics and segments to database`);
+
+    console.log('✅ Game ready! Segments:', rawSegments.length, 'Lyrics length:', fullText.length);
 
     res.json({
       cached: false,
-      segments: processedSegments, // Return processed verse lines
+      segments: rawSegments, // Return raw Whisper segments
       lyrics: fullText,
+      notes: null, // Notes extracted separately via vocals route
       title: title || null,
       artist: artist || null,
+      thumbnail: thumbnailStoragePath || null,
     });
   } catch (error) {
     console.error("Whisper error:", error);

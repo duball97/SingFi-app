@@ -1,3 +1,14 @@
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-main-content {
+  flex: 1;
+  position: relative;
+}
+
 .app {
   min-height: 100vh;
   padding: 2rem;

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Home.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,15 +21,24 @@ export default function Home() {
     try {
       const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
       
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Server returned non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server error: Received ${response.status} ${response.statusText}. Make sure the backend server is running on ${API_BASE_URL}`);
+      }
+      
       if (!response.ok) {
-        throw new Error('Search failed');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Search failed: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
       setSearchResults(data.videos || []);
     } catch (err) {
-      setError(err.message);
       console.error('Search error:', err);
+      alert(err.message || 'Failed to search. Please make sure the backend server is running.');
     } finally {
       setSearching(false);
     }
@@ -44,10 +53,6 @@ export default function Home() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>🎤 SingFi</h1>
-      </header>
-
       <main className="app-main">
         <div className="song-selector">
           <h2>Search for a Song</h2>

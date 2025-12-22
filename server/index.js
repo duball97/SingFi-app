@@ -13,6 +13,7 @@ import vocalsRoutes from './routes/vocals.js';
 import getSongRoutes from './routes/getSong.js';
 import saveSongRoutes from './routes/saveSong.js';
 import searchRoutes from './routes/search.js';
+import songsRoutes from './routes/songs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -40,6 +41,7 @@ app.use('/api/vocals', vocalsRoutes);
 app.use('/api/getSong', getSongRoutes);
 app.use('/api/saveSong', saveSongRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/songs', songsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

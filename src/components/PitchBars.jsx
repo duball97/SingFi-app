@@ -1,280 +1,347 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 
 export default function PitchBars({ segments, currentTime, userPitch, notes }) {
-  // Use real notes if available, otherwise generate synthetic bars from segments
+  // Smooth user pitch for display
+  const [smoothedPitch, setSmoothedPitch] = useState(null);
+  const pitchHistoryRef = useRef([]);
+  
+  // Smooth pitch changes for better visualization
+  useEffect(() => {
+    if (userPitch && userPitch > 50 && userPitch < 2000) {
+      pitchHistoryRef.current.push(userPitch);
+      // Keep last 5 readings for smoothing
+      if (pitchHistoryRef.current.length > 5) {
+        pitchHistoryRef.current.shift();
+      }
+      // Calculate median for noise reduction
+      const sorted = [...pitchHistoryRef.current].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      setSmoothedPitch(median);
+    } else if (!userPitch) {
+      // Clear history when no pitch detected
+      pitchHistoryRef.current = [];
+      setSmoothedPitch(null);
+    }
+  }, [userPitch]);
+  
+  // Calculate the pitch range from the actual notes in the song
+  const pitchRange = useMemo(() => {
+    if (!notes || notes.length === 0) {
+      return { min: 150, max: 500, center: 325 }; // Default range
+    }
+    
+    const pitches = notes.map(n => n.targetPitch).filter(p => p > 50 && p < 2000);
+    if (pitches.length === 0) {
+      return { min: 150, max: 500, center: 325 };
+    }
+    
+    const minPitch = Math.min(...pitches);
+    const maxPitch = Math.max(...pitches);
+    
+    // Add 30% padding above and below for user pitch display
+    const range = maxPitch - minPitch;
+    const padding = Math.max(50, range * 0.3);
+    
+    return {
+      min: Math.max(50, minPitch - padding),
+      max: Math.min(2000, maxPitch + padding),
+      center: (minPitch + maxPitch) / 2,
+      songMin: minPitch,
+      songMax: maxPitch
+    };
+  }, [notes]);
+
+  // Use real notes only
   const pitchBars = useMemo(() => {
-    // If we have real notes from pitch extraction, use those!
-    if (notes && Array.isArray(notes) && notes.length > 0) {
-      console.log('🎵 Using REAL pitch notes:', notes.length);
-      return notes.map((note, index) => ({
-        id: `note-${index}`,
-        start: note.start,
-        end: note.end,
-        duration: note.duration || (note.end - note.start),
-        targetPitch: note.targetPitch,
-        segmentIndex: -1, // Notes don't map to segments
-      }));
+    if (!notes || !Array.isArray(notes) || notes.length === 0) {
+      return [];
     }
-
-    // Fallback: Generate synthetic bars from segments (old method)
-    if (!segments || segments.length === 0) return [];
-    console.log('⚠️ No real notes available, generating synthetic bars from segments');
-
-    const bars = [];
-    let firstSingingStart = null;
     
-    // First pass: find when actual singing starts (skip intro/silence)
-    segments.forEach((segment) => {
-      const start = typeof segment.start === 'number' ? segment.start : parseFloat(segment.start || 0);
-      const text = segment.text || '';
-      // If segment has meaningful text (not just silence/pauses), mark as singing start
-      if (text.trim().length > 3 && firstSingingStart === null) {
-        firstSingingStart = start;
-      }
-    });
+    return notes.map((note, index) => ({
+      id: `note-${index}`,
+      start: note.start,
+      end: note.end,
+      duration: note.duration || (note.end - note.start),
+      targetPitch: note.targetPitch,
+    }));
+  }, [notes]);
 
-    // If no singing found, use first segment
-    if (firstSingingStart === null && segments.length > 0) {
-      firstSingingStart = typeof segments[0].start === 'number' 
-        ? segments[0].start 
-        : parseFloat(segments[0].start || 0);
+  // Find current segment
+  const currentSegment = useMemo(() => {
+    if (!segments || segments.length === 0 || !currentTime) return null;
+    
+    for (const seg of segments) {
+      const start = Number(seg.start) || 0;
+      const end = Number(seg.end) || 0;
+      if (currentTime >= start && currentTime <= end) {
+        return seg;
+      }
     }
-
-    segments.forEach((segment, index) => {
-      const start = typeof segment.start === 'number' ? segment.start : parseFloat(segment.start || 0);
-      const end = typeof segment.end === 'number' ? segment.end : parseFloat(segment.end || 0);
-      const text = segment.text || '';
-      const duration = end - start;
-
-      // Skip segments before singing starts or with no text
-      if (start < firstSingingStart || text.trim().length < 2) {
-        return;
+    
+    // Find last segment that started
+    for (let i = segments.length - 1; i >= 0; i--) {
+      if (currentTime >= Number(segments[i].start)) {
+        return segments[i];
       }
+    }
+    
+    return segments[0] || null;
+  }, [segments, currentTime]);
 
-      // Generate bars with varied lengths like SingStar
-      // Strategy: Create a mix of short, medium, and long notes
-      // Short notes: 0.2-0.5s (quick syllables)
-      // Medium notes: 0.6-1.2s (normal words)
-      // Long notes: 1.5-3.0s (held notes, vowels)
-      
-      let currentPos = start;
-      let barIndex = 0;
-      
-      while (currentPos < end) {
-        // Determine note length based on position in segment - DETERMINISTIC (no Math.random)
-        // Use a pattern: some short, some medium, some long
-        const noteType = (index + barIndex) % 5;
-        let barDuration;
-        
-        // Use deterministic pseudo-random based on index and barIndex
-        const seed = (index * 1000 + barIndex * 100) % 1000;
-        const pseudoRandom = seed / 1000; // 0 to 1
-        
-        if (noteType === 0 || noteType === 1) {
-          // Short notes (40% of bars) - 0.2 to 0.5s
-          barDuration = 0.2 + (pseudoRandom * 0.3);
-        } else if (noteType === 2 || noteType === 3) {
-          // Medium notes (40% of bars) - 0.6 to 1.2s
-          barDuration = 0.6 + (pseudoRandom * 0.6);
-        } else {
-          // Long notes (20% of bars) - 1.5 to 2.5s
-          barDuration = 1.5 + (pseudoRandom * 1.0);
-        }
-        
-        // Don't exceed segment end
-        const barStart = currentPos;
-        const barEnd = Math.min(currentPos + barDuration, end);
-        const actualDuration = barEnd - barStart;
-        
-        // Skip if bar is too short (less than 0.15s)
-        if (actualDuration < 0.15) {
-          currentPos = end;
-          continue;
-        }
-        
-        // Generate varied target pitch (Hz) - typical singing range is 100-600 Hz
-        // Create more variation using multiple sine waves
-        const basePitch = 250 + (index % 7) * 40; // Base varies 250-490 Hz
-        const wave1 = Math.sin((index * 0.7 + barIndex * 0.3)) * 80;
-        const wave2 = Math.cos((index * 0.5 + barIndex * 0.2)) * 50;
-        const variation = wave1 + wave2;
-        const targetPitch = basePitch + variation;
-
-        bars.push({
-          id: `${index}-${barIndex}`,
-          start: barStart,
-          end: barEnd,
-          duration: actualDuration,
-          targetPitch: Math.max(100, Math.min(600, targetPitch)),
-          segmentIndex: index,
-        });
-        
-        currentPos = barEnd;
-        barIndex++;
-      }
-    });
-
-    return bars;
-  }, [segments]);
-
-  // Find bars that should be visible (current time + 4 seconds ahead, 2 seconds behind)
+  // Get visible bars for current verse - show ALL notes in the current segment
   const visibleBars = useMemo(() => {
-    if (!currentTime || currentTime === 0) {
-      // If no currentTime, show first 20 bars
-      return pitchBars.slice(0, 20);
+    if (!currentTime || pitchBars.length === 0 || !currentSegment) {
+      return [];
     }
     
-    const windowStart = currentTime - 2; // Show bars 2s past center
-    const windowEnd = currentTime + 4; // Show bars 4s ahead
+    const segmentStart = Number(currentSegment.start) || 0;
+    const segmentEnd = Number(currentSegment.end) || 0;
     
-    return pitchBars.filter(bar => bar.start <= windowEnd && bar.end >= windowStart);
-  }, [pitchBars, currentTime]);
+    // Get ALL notes that overlap with this segment
+    const segmentNotes = pitchBars.filter(bar => 
+      bar.start < segmentEnd && bar.end > segmentStart
+    );
+    
+    segmentNotes.sort((a, b) => a.start - b.start);
+    
+    // Return up to 6 notes per verse
+    return segmentNotes.slice(0, 6);
+  }, [pitchBars, currentTime, currentSegment]);
 
-  // Find the active bar (the one the user should be matching)
+  // Find the currently active note
   const activeBar = useMemo(() => {
-    if (!currentTime) return null;
+    if (!currentTime || visibleBars.length === 0) return null;
     
+    // Find the note we're currently in
     return visibleBars.find(bar => 
       currentTime >= bar.start && currentTime <= bar.end
-    ) || visibleBars.find(bar => 
-      currentTime >= bar.start && currentTime < bar.start + 0.3
     ) || null;
   }, [visibleBars, currentTime]);
 
-  // Calculate accuracy for active bar
+  // Calculate accuracy percentage
   const accuracy = useMemo(() => {
-    if (!activeBar || !userPitch) return 0;
+    if (!activeBar || !smoothedPitch) return 0;
     
-    const diff = Math.abs(userPitch - activeBar.targetPitch);
-    const maxDiff = 100; // Maximum acceptable difference
-    const accuracy = Math.max(0, 100 - (diff / maxDiff) * 100);
+    const diff = Math.abs(smoothedPitch - activeBar.targetPitch);
+    // Use dynamic tolerance based on pitch (higher pitches have more variance)
+    const tolerance = Math.max(30, activeBar.targetPitch * 0.1);
+    const acc = Math.max(0, 100 - (diff / tolerance) * 50);
     
-    return accuracy;
-  }, [activeBar, userPitch]);
+    return Math.min(100, acc);
+  }, [activeBar, smoothedPitch]);
 
-  // Calculate position of bar (0-100% from right to left)
-  // Bars start at 100% (right) and move to left, passing center at 50%, continuing to ~20%
-  // Center line is at 50% - this is where user should match
-  const getBarPosition = (bar) => {
-    if (!currentTime || currentTime === 0) {
-      // If no currentTime, position bars based on their start time relative to visible bars
-      if (visibleBars.length === 0) {
-        // Fallback: use all pitchBars if visibleBars is empty
-        if (pitchBars.length === 0) return 100;
-        const firstBarStart = pitchBars[0]?.start || bar.start;
-        const lastBarStart = pitchBars[pitchBars.length - 1]?.start || bar.start;
-        const timeRange = Math.max(6, lastBarStart - firstBarStart);
-        const timeDiff = bar.start - firstBarStart;
-        const normalized = Math.min(1, Math.max(0, timeDiff / timeRange));
-        return 100 - (normalized * 80);
-      }
-      const firstBarStart = visibleBars[0]?.start || bar.start;
-      const lastBarStart = visibleBars[visibleBars.length - 1]?.start || bar.start;
-      const timeRange = Math.max(6, lastBarStart - firstBarStart); // At least 6 second window
-      const timeDiff = bar.start - firstBarStart;
-      // Position bars from right (100%) to left (20%) based on their relative start times
-      // Bars that start later appear more to the right
-      const normalized = Math.min(1, Math.max(0, timeDiff / timeRange));
-      return 100 - (normalized * 80); // 100% (right) to 20% (left)
-    }
+  // Pitch status (above/below/on-target)
+  const pitchStatus = useMemo(() => {
+    if (!smoothedPitch || !activeBar) return null;
     
-    const timeDiff = bar.start - currentTime;
-    // Bars appear 4 seconds ahead and disappear 2 seconds after passing center
-    const lookAhead = 4; // How far ahead bars appear (right side)
-    const lookBehind = 2; // How far past center bars continue (left side)
-    const totalWindow = lookAhead + lookBehind;
+    const diff = smoothedPitch - activeBar.targetPitch;
+    // Dynamic tolerance
+    const tolerance = Math.max(25, activeBar.targetPitch * 0.08);
     
-    // Position calculation:
-    // When bar.start is 4s ahead of currentTime → position = 100% (right edge)
-    // When bar.start equals currentTime → position = 50% (center line)
-    // When bar.start is 2s past currentTime → position = 20% (left, past center)
-    // Position: 100% when 4s ahead, 50% when at current time, 20% when 2s past
-    const normalizedTime = (timeDiff + lookAhead) / totalWindow;
-    const position = 20 + (normalizedTime * 80); // Maps to 20% (left) to 100% (right)
+    if (Math.abs(diff) <= tolerance) return 'on-target';
+    return diff > 0 ? 'above' : 'below';
+  }, [smoothedPitch, activeBar]);
+
+  // Convert pitch to Y position on screen
+  const pitchToY = (pitch) => {
+    const trackHeight = 300;
+    const topMargin = 20;
+    const bottomMargin = 20;
+    const usableHeight = trackHeight - topMargin - bottomMargin;
     
-    return Math.max(-5, Math.min(105, position)); // Allow slight overflow for smooth entry/exit
+    // Normalize pitch to 0-1 range based on song's pitch range
+    const normalizedPitch = (pitch - pitchRange.min) / (pitchRange.max - pitchRange.min);
+    // Clamp to 0-1
+    const clamped = Math.max(0, Math.min(1, normalizedPitch));
+    // Invert (higher pitch = higher on screen = lower Y)
+    const y = trackHeight - bottomMargin - (clamped * usableHeight);
+    
+    return y;
+  };
+
+  // User's current pitch position
+  const userPitchY = smoothedPitch ? pitchToY(smoothedPitch) : null;
+  
+  // Target pitch position (when there's an active bar)
+  const targetPitchY = activeBar ? pitchToY(activeBar.targetPitch) : null;
+
+  // Calculate bar position (horizontal) based on time within segment
+  const getBarPositionInSegment = (bar, index, total) => {
+    if (!currentSegment) return 50;
+    
+    const segStart = Number(currentSegment.start);
+    const segEnd = Number(currentSegment.end);
+    const segDuration = segEnd - segStart;
+    
+    if (segDuration <= 0) return 20 + (index * 60 / Math.max(1, total - 1));
+    
+    // Position bar based on its time within the segment
+    const barCenter = (bar.start + bar.end) / 2;
+    const relativeTime = (barCenter - segStart) / segDuration;
+    
+    // Map to 10% - 90% of screen width
+    return 10 + (relativeTime * 80);
+  };
+
+  // Get width of bar based on duration
+  const getBarWidth = (bar) => {
+    if (!currentSegment) return 8;
+    
+    const segStart = Number(currentSegment.start);
+    const segEnd = Number(currentSegment.end);
+    const segDuration = segEnd - segStart;
+    
+    if (segDuration <= 0) return 8;
+    
+    // Width proportional to duration (as percentage of segment)
+    const durationPercent = (bar.duration / segDuration) * 80;
+    return Math.max(4, Math.min(25, durationPercent));
   };
 
   return (
     <div className="pitch-bars-container">
       <div className="pitch-bars-track">
-        {/* Center line indicator */}
-        <div className="pitch-bars-center-line"></div>
+        {/* Horizontal pitch guide lines */}
+        <div className="pitch-guide-lines">
+          <div className="pitch-guide-line high" style={{ top: '15%' }}>
+            <span className="pitch-guide-label">HIGH</span>
+          </div>
+          <div className="pitch-guide-line mid" style={{ top: '50%' }}>
+            <span className="pitch-guide-label">MID</span>
+          </div>
+          <div className="pitch-guide-line low" style={{ top: '85%' }}>
+            <span className="pitch-guide-label">LOW</span>
+          </div>
+        </div>
         
-        {/* Render visible bars */}
-        {visibleBars.map((bar) => {
-          const position = getBarPosition(bar);
+        {/* Target pitch indicator (golden bar where you should sing) */}
+        {activeBar && targetPitchY !== null && (
+          <div 
+            className="target-pitch-bar"
+            style={{ top: `${targetPitchY}px` }}
+          >
+            <div className="target-pitch-marker">
+              <span className="target-label">♪ TARGET</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Render note bars */}
+        {visibleBars.map((bar, index) => {
+          const position = getBarPositionInSegment(bar, index, visibleBars.length);
+          const barWidth = getBarWidth(bar);
+          const barY = pitchToY(bar.targetPitch);
           const isActive = activeBar?.id === bar.id;
-          const isHit = isActive && userPitch && accuracy > 70;
+          const isHit = isActive && smoothedPitch && accuracy >= 70;
+          const isPast = currentTime > bar.end;
+          const isFuture = currentTime < bar.start;
           
-          // Calculate bar height (fixed size, doesn't change with pitch)
-          const barHeight = 40; // Fixed height in pixels
-          
-          // Calculate bar width based on duration (longer = wider)
-          // Short notes (0.2-0.5s): 50-70px
-          // Medium notes (0.6-1.2s): 80-120px
-          // Long notes (1.5-2.5s): 130-180px
-          let barWidth;
-          if (bar.duration < 0.5) {
-            // Short note
-            barWidth = 50 + (bar.duration / 0.5) * 20; // 50-70px
-          } else if (bar.duration < 1.2) {
-            // Medium note
-            barWidth = 80 + ((bar.duration - 0.5) / 0.7) * 40; // 80-120px
-          } else {
-            // Long note
-            barWidth = 130 + ((bar.duration - 1.2) / 1.3) * 50; // 130-180px
-          }
-          barWidth = Math.max(50, Math.min(180, barWidth));
-          
-          // Position bar vertically based on pitch
-          // Higher pitch = higher position (lower top value), lower pitch = lower position (higher top value)
-          // Pitch range: 100-600 Hz
-          // Track height: 300px
-          // Position range: 30px (top/high pitch) to 260px (bottom/low pitch)
-          // Center line at 150px represents ~350 Hz (middle of range)
-          const minPitch = 100;
-          const maxPitch = 600;
-          const pitchRange = maxPitch - minPitch;
-          const trackHeight = 300;
-          const topMargin = 30; // Space from top
-          const bottomMargin = 30; // Space from bottom
-          const usableHeight = trackHeight - topMargin - bottomMargin;
-          
-          // Ensure targetPitch is within valid range
-          const clampedPitch = Math.max(minPitch, Math.min(maxPitch, bar.targetPitch || 350));
-          
-          // Higher pitch = lower top value (higher on screen)
-          // 600 Hz (high) = 30px (top), 100 Hz (low) = 270px (bottom)
-          const pitchPercent = (clampedPitch - minPitch) / pitchRange;
-          const topPosition = trackHeight - bottomMargin - (pitchPercent * usableHeight) - (barHeight / 2);
-          
-          // Debug log for first few bars (only once per render)
-          if (visibleBars.indexOf(bar) < 3 && Math.random() < 0.01) {
-            console.log(`Bar ${bar.id}: start=${bar.start.toFixed(2)}s, currentTime=${currentTime?.toFixed(2) || '0'}s, pitch=${clampedPitch.toFixed(0)}Hz, left=${position.toFixed(1)}%, top=${topPosition.toFixed(1)}px`);
+          // Calculate where user pitch intersects this bar (for per-bar feedback)
+          let userHitY = null;
+          let barHitStatus = null;
+          if (isActive && smoothedPitch) {
+            userHitY = pitchToY(smoothedPitch);
+            const diff = smoothedPitch - bar.targetPitch;
+            const tolerance = Math.max(25, bar.targetPitch * 0.08);
+            if (Math.abs(diff) <= tolerance) barHitStatus = 'on-target';
+            else barHitStatus = diff > 0 ? 'above' : 'below';
           }
 
           return (
             <div
               key={bar.id}
-              className={`pitch-bar ${isActive ? 'active' : ''} ${isHit ? 'hit' : ''}`}
+              className={`pitch-bar-note ${isActive ? 'active' : ''} ${isHit ? 'hit' : ''} ${isPast ? 'past' : ''} ${isFuture ? 'future' : ''}`}
               style={{
                 left: `${position}%`,
-                top: `${topPosition}px`,
-                height: `${barHeight}px`,
-                width: `${barWidth}px`,
+                top: `${barY - 25}px`, // Center bar vertically on pitch
+                width: `${barWidth}%`,
+                height: '50px',
               }}
             >
-              {isActive && userPitch && (
-                <div className="pitch-bar-accuracy" style={{ opacity: accuracy / 100 }}>
-                  {Math.round(accuracy)}%
+              <div className="note-glow"></div>
+              <div className="note-inner">
+                {/* Pitch value label */}
+                <span className="note-pitch-label">{bar.targetPitch}Hz</span>
+              </div>
+              
+              {/* Per-bar user hit indicator */}
+              {isActive && userHitY !== null && (
+                <div 
+                  className={`bar-hit-indicator ${barHitStatus || ''}`}
+                  style={{ 
+                    top: `${userHitY - barY + 25}px`, // Relative to bar
+                  }}
+                >
+                  <div className="hit-marker"></div>
+                </div>
+              )}
+              
+              {/* Accuracy display */}
+              {isActive && smoothedPitch && (
+                <div className={`bar-accuracy ${barHitStatus || ''}`}>
+                  {accuracy >= 70 ? '✓' : Math.round(accuracy) + '%'}
                 </div>
               )}
             </div>
           );
         })}
+        
+        {/* User pitch indicator - horizontal line across screen */}
+        {userPitchY !== null && (
+          <div 
+            className={`user-pitch-beam ${pitchStatus || 'no-target'}`}
+            style={{ top: `${userPitchY}px` }}
+          >
+            {/* Glowing orb at the left side */}
+            <div className="pitch-orb">
+              <div className="orb-core"></div>
+              <div className="orb-glow"></div>
+            </div>
+            
+            {/* Status text */}
+            <div className="pitch-status-display">
+              {activeBar ? (
+                <>
+                  <span className={`status-text ${pitchStatus}`}>
+                    {pitchStatus === 'on-target' && '🎯 PERFECT!'}
+                    {pitchStatus === 'above' && '⬆️ Too High'}
+                    {pitchStatus === 'below' && '⬇️ Too Low'}
+                  </span>
+                  <span className="pitch-value">{Math.round(smoothedPitch)}Hz</span>
+                </>
+              ) : (
+                <>
+                  <span className="status-text neutral">🎤 Singing...</span>
+                  <span className="pitch-value">{Math.round(smoothedPitch)}Hz</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* No pitch detected indicator */}
+        {!smoothedPitch && !userPitch && (
+          <div className="no-pitch-indicator">
+            <span>🎤 Sing into the mic!</span>
+          </div>
+        )}
+        
+        {/* Distance indicator connecting user to target */}
+        {activeBar && userPitchY !== null && targetPitchY !== null && Math.abs(userPitchY - targetPitchY) > 10 && (
+          <div 
+            className={`pitch-distance-line ${pitchStatus || ''}`}
+            style={{
+              top: `${Math.min(userPitchY, targetPitchY)}px`,
+              height: `${Math.abs(userPitchY - targetPitchY)}px`,
+              left: '8%',
+            }}
+          >
+            <span className="distance-label">
+              {Math.abs(Math.round(smoothedPitch - activeBar.targetPitch))}Hz
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

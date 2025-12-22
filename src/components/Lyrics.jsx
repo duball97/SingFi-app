@@ -59,7 +59,7 @@ export default function Lyrics({ segments, currentTime }) {
     }
   }, [currentIdx, currentTime, segments]);
 
-  // Get segments directly from array using displayedIdx
+  // Get current and next segments
   const current = displayedIdx >= 0 && segments[displayedIdx] ? segments[displayedIdx] : null;
   const next = displayedIdx >= 0 && segments[displayedIdx + 1] ? segments[displayedIdx + 1] : null;
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-export default function PitchDetector({ onPitchDetected }) {
+export default function PitchDetector({ onPitchDetected, isPaused = false }) {
   const [isListening, setIsListening] = useState(false);
   const [currentPitch, setCurrentPitch] = useState(null);
   const audioContextRef = useRef(null);
@@ -8,6 +8,27 @@ export default function PitchDetector({ onPitchDetected }) {
   const dataArrayRef = useRef(null);
   const animationFrameRef = useRef(null);
   const isListeningRef = useRef(false);
+
+  useEffect(() => {
+    // Restart detection loop if pause state changes and we're listening
+    if (isListeningRef.current && !isPaused && analyserRef.current && dataArrayRef.current) {
+      // Cancel any existing loop
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      // Restart detection
+      detectPitch();
+    } else if (isPaused && animationFrameRef.current) {
+      // Stop detection when paused
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+      setCurrentPitch(null);
+      if (onPitchDetected) {
+        onPitchDetected(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaused]);
 
   useEffect(() => {
     return () => {
@@ -60,7 +81,16 @@ export default function PitchDetector({ onPitchDetected }) {
   };
 
   const detectPitch = () => {
-    if (!isListeningRef.current || !analyserRef.current || !dataArrayRef.current) return;
+    if (!isListeningRef.current || !analyserRef.current || !dataArrayRef.current || isPaused) {
+      // If paused, stop detection loop
+      if (isPaused && isListeningRef.current) {
+        setCurrentPitch(null);
+        if (onPitchDetected) {
+          onPitchDetected(null);
+        }
+      }
+      return;
+    }
 
     analyserRef.current.getByteFrequencyData(dataArrayRef.current);
 
@@ -95,7 +125,7 @@ export default function PitchDetector({ onPitchDetected }) {
       }
     }
 
-    if (isListeningRef.current) {
+    if (isListeningRef.current && !isPaused) {
       animationFrameRef.current = requestAnimationFrame(detectPitch);
     }
   };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Home.css';
 
@@ -8,6 +8,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [suggestedSongs, setSuggestedSongs] = useState([]);
+  const [loadingSuggested, setLoadingSuggested] = useState(true);
   const navigate = useNavigate();
 
   const handleSearch = async (query) => {
@@ -43,6 +45,30 @@ export default function Home() {
       setSearching(false);
     }
   };
+
+  // Fetch suggested songs on mount
+  useEffect(() => {
+    const fetchSuggestedSongs = async () => {
+      try {
+        setLoadingSuggested(true);
+        const response = await fetch(`${API_BASE_URL}/songs?limit=12`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch suggested songs');
+        }
+        
+        const data = await response.json();
+        setSuggestedSongs(data.songs || []);
+      } catch (error) {
+        console.error('Error fetching suggested songs:', error);
+        // Don't show error to user, just leave empty
+      } finally {
+        setLoadingSuggested(false);
+      }
+    };
+
+    fetchSuggestedSongs();
+  }, []);
 
   const handleSelectSong = (video) => {
     // Navigate immediately to show loading screen
@@ -107,6 +133,57 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Suggested Songs Section */}
+          {!searching && searchResults.length === 0 && (
+            <div className="suggested-songs">
+              <h3 className="suggested-songs-title">
+                <span className="title-icon">🎵</span>
+                Suggested Songs
+              </h3>
+              {loadingSuggested ? (
+                <div className="suggested-loading">
+                  <div className="loading-spinner-small"></div>
+                  <p>Loading songs...</p>
+                </div>
+              ) : suggestedSongs.length > 0 ? (
+                <div className="suggested-list">
+                  {suggestedSongs.map((song) => (
+                    <div
+                      key={song.id}
+                      className="suggested-item"
+                      onClick={() => handleSelectSong(song)}
+                    >
+                      {song.thumbnail && (
+                        <div className="suggested-thumbnail-wrapper">
+                          <img
+                            src={song.thumbnail}
+                            alt={song.title}
+                            className="suggested-thumbnail"
+                          />
+                          <div className="play-overlay">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </div>
+                        </div>
+                      )}
+                      <div className="suggested-info">
+                        <div className="suggested-title">{song.title}</div>
+                        {song.channel && (
+                          <div className="suggested-artist">{song.channel}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-suggested-songs">
+                  <p>No songs available yet. Search for a song to get started!</p>
+                </div>
+              )}
             </div>
           )}
         </div>

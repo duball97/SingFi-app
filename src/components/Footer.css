@@ -6,6 +6,11 @@
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
+/* Hide footer on game page */
+.app-layout:has(.game-page) .site-footer {
+  display: none !important;
+}
+
 .footer-container {
   max-width: 1400px;
   margin: 0 auto;

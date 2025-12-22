@@ -65,8 +65,8 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(stream);
 
-      analyser.fftSize = 4096; // Larger FFT for better frequency resolution
-      analyser.smoothingTimeConstant = 0.3; // Less smoothing for more responsive detection
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.8;
       microphone.connect(analyser);
 
       audioContextRef.current = audioContext;
@@ -111,138 +111,45 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
     }
   }, []);
 
-  // VASTLY IMPROVED pitch detection - more sensitive and accurate
+  // Pitch detection loop
   const detectPitch = useCallback(() => {
     try {
-      if (!analyserRef.current || !audioContextRef.current) {
+      if (!analyserRef.current || !dataArrayRef.current || !isPlayingRef.current || !audioContextRef.current) {
         return;
       }
 
+      // Check if audio context is still active
       if (audioContextRef.current.state === 'closed') {
         return;
       }
+
+      analyserRef.current.getByteFrequencyData(dataArrayRef.current);
 
       const sampleRate = audioContextRef.current.sampleRate;
       const bufferLength = analyserRef.current.fftSize;
       const data = new Float32Array(bufferLength);
       analyserRef.current.getFloatTimeDomainData(data);
 
-      // Calculate RMS (root mean square) for volume detection
-      let sumSquares = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sumSquares += data[i] * data[i];
-      }
-      const rms = Math.sqrt(sumSquares / bufferLength);
-      
-      // Much lower threshold - detect even quiet singing
-      const volumeThreshold = 0.005; // Very sensitive
-      
-      if (rms < volumeThreshold) {
-        // Too quiet - clear pitch but keep detecting
-        setUserPitch(null);
-        if (isPlayingRef.current && isMicActive) {
-          micAnimationRef.current = requestAnimationFrame(detectPitch);
-        }
-        return;
-      }
+      let maxCorrelation = 0;
+      let maxPeriod = 0;
 
-      // Normalize the signal for pitch detection
-      let maxVal = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
-      }
-      if (maxVal > 0) {
-        for (let i = 0; i < bufferLength; i++) {
-          data[i] = data[i] / maxVal;
+      for (let period = 20; period < bufferLength / 2; period++) {
+        let correlation = 0;
+        for (let i = 0; i < bufferLength - period; i++) {
+          correlation += Math.abs(data[i] * data[i + period]);
+        }
+        if (correlation > maxCorrelation) {
+          maxCorrelation = correlation;
+          maxPeriod = period;
         }
       }
 
-      // YIN-inspired autocorrelation for better pitch detection
-      // Human voice fundamental frequency range: 75Hz - 800Hz (most common singing range)
-      const minPeriod = Math.floor(sampleRate / 800);  // Max 800Hz
-      const maxPeriod = Math.floor(sampleRate / 75);   // Min 75Hz
-      
-      // Calculate difference function (similar to YIN algorithm)
-      const windowSize = Math.min(bufferLength / 2, maxPeriod * 2);
-      const diffFunction = new Float32Array(maxPeriod - minPeriod + 1);
-      
-      for (let tau = minPeriod; tau <= maxPeriod; tau++) {
-        let diff = 0;
-        for (let i = 0; i < windowSize; i++) {
-          const delta = data[i] - data[i + tau];
-          diff += delta * delta;
-        }
-        diffFunction[tau - minPeriod] = diff;
-      }
-      
-      // Cumulative mean normalized difference (CMND)
-      const cmnd = new Float32Array(diffFunction.length);
-      cmnd[0] = 1;
-      let runningSum = diffFunction[0];
-      
-      for (let i = 1; i < diffFunction.length; i++) {
-        runningSum += diffFunction[i];
-        cmnd[i] = diffFunction[i] / (runningSum / (i + 1));
-      }
-      
-      // Find the first dip below threshold (YIN-style)
-      const yinThreshold = 0.15; // Slightly higher for noise tolerance
-      let bestPeriod = -1;
-      let bestValue = Infinity;
-      
-      for (let i = 1; i < cmnd.length - 1; i++) {
-        // Look for local minimum that's below threshold
-        if (cmnd[i] < yinThreshold && cmnd[i] < cmnd[i - 1] && cmnd[i] <= cmnd[i + 1]) {
-          if (cmnd[i] < bestValue) {
-            bestValue = cmnd[i];
-            bestPeriod = i + minPeriod;
-          }
-          // Take first good match (fundamental, not harmonic)
-          break;
-        }
-      }
-      
-      // Fallback: find global minimum if no threshold crossing
-      if (bestPeriod < 0) {
-        for (let i = 1; i < cmnd.length - 1; i++) {
-          if (cmnd[i] < bestValue && cmnd[i] < cmnd[i - 1] && cmnd[i] <= cmnd[i + 1]) {
-            bestValue = cmnd[i];
-            bestPeriod = i + minPeriod;
-          }
-        }
-      }
-      
-      // Only accept if we found a good period and CMND is reasonably low
-      if (bestPeriod > 0 && bestValue < 0.5) {
-        // Parabolic interpolation for sub-sample accuracy
-        const idx = bestPeriod - minPeriod;
-        if (idx > 0 && idx < cmnd.length - 1) {
-          const alpha = cmnd[idx - 1];
-          const beta = cmnd[idx];
-          const gamma = cmnd[idx + 1];
-          const peak = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma);
-          bestPeriod = bestPeriod + peak;
-        }
-        
-        const frequency = sampleRate / bestPeriod;
-        
-        // Validate frequency is in reasonable singing range
-        if (frequency >= 75 && frequency <= 800) {
+      if (maxPeriod > 0) {
+        const frequency = sampleRate / maxPeriod;
+        if (frequency > 80 && frequency < 2000) {
           setUserPitch(frequency);
-          
-          // Score based on volume (louder = more confident)
-          const volumeScore = Math.min(1, rms * 10);
-          setScore(prev => prev + (0.1 * volumeScore));
-          
-          // Occasional logging
-          if (Math.random() < 0.02) {
-            console.log(`🎤 Pitch: ${frequency.toFixed(1)}Hz (CMND: ${bestValue.toFixed(3)}, RMS: ${rms.toFixed(4)})`);
-          }
-        } else {
-          setUserPitch(null);
+          setScore(prev => prev + 0.1);
         }
-      } else {
-        setUserPitch(null);
       }
 
       if (isPlayingRef.current && isMicActive && audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -250,6 +157,7 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
       }
     } catch (error) {
       console.error('Error in pitch detection:', error);
+      // Stop detection on error
       if (micAnimationRef.current) {
         cancelAnimationFrame(micAnimationRef.current);
         micAnimationRef.current = null;
@@ -552,26 +460,20 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
           <Lyrics segments={segments} currentTime={currentTime} />
         </div>
         
-        {/* Pause/Resume Button - CENTERED, HUGE, IMPOSSIBLE TO MISS */}
+        {/* Pause/Resume Button - Circular icon only, 100px down from center */}
         <button 
           onClick={handlePauseResume}
           className={`game-stop-button-center ${!isPlaying ? 'resume-state' : ''}`}
           aria-label={isPlaying ? 'Pause' : 'Resume'}
         >
           {isPlaying ? (
-            <>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 6h12v12H6z"/>
-              </svg>
-              <span>PAUSE</span>
-            </>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 6h12v12H6z"/>
+            </svg>
           ) : (
-            <>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-              <span>RESUME</span>
-            </>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
           )}
         </button>
 

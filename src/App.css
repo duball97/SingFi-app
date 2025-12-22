@@ -995,51 +995,48 @@
 /* Stop Button - CENTERED, HUGE, IMPOSSIBLE TO MISS */
 .game-stop-button-center {
   position: fixed !important;
-  top: 1rem !important;
-  right: 1rem !important;
-  z-index: 100000 !important; /* Above EVERYTHING */
+  top: calc(50% + 100px) !important; /* 100px down from center */
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 99999 !important; /* Above EVERYTHING */
   display: flex !important;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem !important;
+  width: 60px !important;
+  height: 60px !important;
+  padding: 0 !important;
   backdrop-filter: blur(20px);
-  border-radius: 50px;
+  border-radius: 50% !important; /* Perfect circle */
   color: white !important;
-  font-size: 1rem !important;
-  font-weight: 900 !important;
   cursor: pointer;
   transition: all 0.3s;
-  text-transform: uppercase;
-  letter-spacing: 2px;
   pointer-events: auto !important;
   visibility: visible !important;
   opacity: 1 !important;
-  min-width: 120px;
   /* Default: PAUSE state (red) */
   background: #dc3545 !important;
   border: 3px solid #ff0000 !important;
   box-shadow: 
-    0 6px 24px rgba(0, 0, 0, 0.9), 
-    0 0 30px rgba(220, 53, 69, 1),
-    inset 0 2px 6px rgba(255, 255, 255, 0.3);
+    0 8px 32px rgba(0, 0, 0, 0.9), 
+    0 0 40px rgba(220, 53, 69, 1),
+    inset 0 2px 8px rgba(255, 255, 255, 0.3);
 }
 
 /* RESUME state (orange/yellow) */
 .game-stop-button-center.resume-state {
   background: #ff6b35 !important;
-  border: 2px solid #ffd700 !important;
+  border: 4px solid #ffd700 !important;
   box-shadow: 
-    0 4px 16px rgba(0, 0, 0, 0.7), 
-    0 0 20px rgba(255, 107, 53, 0.8),
-    inset 0 1px 4px rgba(255, 255, 255, 0.2);
+    0 12px 48px rgba(0, 0, 0, 0.9), 
+    0 0 50px rgba(255, 107, 53, 1),
+    inset 0 2px 8px rgba(255, 255, 255, 0.3);
 }
 
 .game-stop-button-center:hover {
-  transform: scale(1.05) !important;
+  transform: translate(-50%, -50%) scale(1.15) !important;
   box-shadow: 
-    0 6px 20px rgba(0, 0, 0, 0.8), 
-    0 0 25px currentColor;
+    0 12px 48px rgba(0, 0, 0, 1), 
+    0 0 50px currentColor;
 }
 
 .game-stop-button-center.resume-state:hover {
@@ -1048,18 +1045,13 @@
 }
 
 .game-stop-button-center:active {
-  transform: scale(0.95) !important;
+  transform: translate(-50%, -50%) scale(0.9) !important;
 }
 
 .game-stop-button-center svg {
-  width: 20px !important;
-  height: 20px !important;
+  width: 24px !important;
+  height: 24px !important;
   flex-shrink: 0;
-}
-
-.game-stop-button-center span {
-  font-weight: 900 !important;
-  font-size: 1rem !important;
 }
 
 /* Keep old button class for backwards compatibility */
@@ -1178,462 +1170,345 @@
   pointer-events: none;
 }
 
-/* ============================================
-   NEW SINGSTAR-STYLE PITCH VISUALIZATION
-   ============================================ */
-
 .pitch-bars-container {
   width: 100%;
   height: 100%;
   position: relative;
-  overflow: hidden;
 }
 
 .pitch-bars-track {
   width: 100%;
-  height: 300px;
-  position: relative;
-  background: linear-gradient(180deg, 
-    rgba(0, 0, 0, 0.3) 0%,
-    rgba(0, 0, 0, 0.5) 50%,
-    rgba(0, 0, 0, 0.3) 100%);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Pitch guide lines (horizontal) */
-.pitch-guide-lines {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.pitch-guide-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-50%);
-}
-
-.pitch-guide-line.high { border-top: 1px dashed rgba(59, 130, 246, 0.4); }
-.pitch-guide-line.mid { border-top: 1px dashed rgba(255, 215, 0, 0.4); }
-.pitch-guide-line.low { border-top: 1px dashed rgba(239, 68, 68, 0.4); }
-
-.pitch-guide-label {
-  position: absolute;
-  right: 10px;
-  transform: translateY(-50%);
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-/* Target pitch bar (golden horizontal bar where you should sing) */
-.target-pitch-bar {
-  position: absolute;
-  left: 5%;
-  right: 5%;
-  height: 4px;
-  background: linear-gradient(90deg,
-    rgba(255, 215, 0, 0.3) 0%,
-    rgba(255, 215, 0, 0.8) 50%,
-    rgba(255, 215, 0, 0.3) 100%);
-  transform: translateY(-50%);
-  z-index: 5;
-  border-radius: 2px;
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
-}
-
-.target-pitch-marker {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%) translateY(-50%);
-  top: 50%;
-}
-
-.target-label {
-  background: rgba(255, 215, 0, 0.9);
-  color: #000;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  box-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
-}
-
-/* Note bars - the target notes to hit */
-.pitch-bar-note {
-  position: absolute;
-  transform: translateX(-50%);
-  border-radius: 8px;
-  background: linear-gradient(180deg, 
-    rgba(255, 107, 53, 0.8) 0%, 
-    rgba(247, 147, 30, 0.6) 100%);
-  border: 2px solid rgba(255, 107, 53, 0.9);
-  box-shadow: 
-    0 0 10px rgba(255, 107, 53, 0.5),
-    inset 0 0 15px rgba(255, 255, 255, 0.1);
-  z-index: 3;
-  transition: all 0.2s ease-out;
-  overflow: visible;
-}
-
-.pitch-bar-note .note-glow {
-  position: absolute;
-  inset: -4px;
-  border-radius: 12px;
-  background: transparent;
-  z-index: -1;
-}
-
-.pitch-bar-note .note-inner {
-  width: 100%;
   height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pitch-bars-center-line {
+  position: absolute;
+  left: 15%;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: linear-gradient(180deg, 
+    rgba(255, 215, 0, 0.9) 0%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(255, 215, 0, 0.9) 100%
+  );
+  box-shadow: 
+    0 0 20px rgba(255, 215, 0, 1),
+    0 0 40px rgba(255, 215, 0, 0.8),
+    0 0 60px rgba(255, 215, 0, 0.5);
+  transform: translateX(-50%);
+  z-index: 2;
+  border-radius: 4px;
+  animation: center-line-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes center-line-pulse {
+  0%, 100% {
+    opacity: 0.9;
+    box-shadow: 
+      0 0 15px rgba(255, 107, 53, 1),
+      0 0 30px rgba(255, 107, 53, 0.8),
+      0 0 45px rgba(255, 107, 53, 0.5);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 
+      0 0 20px rgba(255, 107, 53, 1),
+      0 0 40px rgba(255, 107, 53, 1),
+      0 0 60px rgba(255, 107, 53, 0.7);
+  }
+}
+
+.pitch-bar {
+  position: absolute;
+  min-width: 50px;
+  background: linear-gradient(180deg, #ff6b35 0%, #f7931e 100%);
+  border: 3px solid rgba(255, 107, 53, 0.9);
+  border-radius: 30px;
+  box-shadow: 
+    0 0 15px rgba(255, 107, 53, 0.8),
+    0 0 30px rgba(255, 107, 53, 0.5),
+    inset 0 0 10px rgba(255, 255, 255, 0.2);
+  transition: left 0.05s linear;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  /* Position by LEFT edge, not center - bar extends to the right */
+  /* NO transform: translateX(-50%) */
+  will-change: left;
 }
 
-.pitch-bar-note .note-pitch-label {
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  white-space: nowrap;
-}
-
-.pitch-bar-note.future {
-  opacity: 0.5;
-}
-
-.pitch-bar-note.past {
-  opacity: 0.3;
-  filter: grayscale(0.5);
-}
-
-.pitch-bar-note.active {
+.pitch-bar.active {
   border-color: #ffd700;
-  background: linear-gradient(180deg, 
-    rgba(255, 215, 0, 0.9) 0%, 
-    rgba(255, 107, 53, 0.8) 100%);
   box-shadow: 
-    0 0 20px rgba(255, 215, 0, 0.8),
-    0 0 40px rgba(255, 107, 53, 0.5),
-    inset 0 0 20px rgba(255, 255, 255, 0.2);
-  animation: note-pulse 1s ease-in-out infinite;
+    0 0 20px rgba(255, 215, 0, 1),
+    0 0 40px rgba(255, 107, 53, 0.8),
+    0 0 60px rgba(255, 107, 53, 0.5),
+    inset 0 0 15px rgba(255, 255, 255, 0.3);
+  animation: pulse-glow 1s ease-in-out infinite;
 }
 
-.pitch-bar-note.hit {
-  background: linear-gradient(180deg, 
-    rgba(74, 222, 128, 0.9) 0%, 
-    rgba(34, 197, 94, 0.8) 100%);
+.pitch-bar.hit {
+  background: linear-gradient(180deg, #4ade80 0%, #22c55e 100%);
   border-color: #4ade80;
   box-shadow: 
     0 0 25px rgba(74, 222, 128, 1),
-    0 0 50px rgba(74, 222, 128, 0.6),
-    inset 0 0 15px rgba(255, 255, 255, 0.3);
+    0 0 50px rgba(74, 222, 128, 0.8),
+    inset 0 0 15px rgba(255, 255, 255, 0.4);
 }
 
-@keyframes note-pulse {
+@keyframes pulse-glow {
   0%, 100% {
     box-shadow: 
-      0 0 20px rgba(255, 215, 0, 0.8),
-      0 0 40px rgba(255, 107, 53, 0.5);
+      0 0 20px rgba(255, 215, 0, 1),
+      0 0 40px rgba(255, 107, 53, 0.8),
+      0 0 60px rgba(255, 107, 53, 0.5),
+      inset 0 0 15px rgba(255, 255, 255, 0.3);
   }
   50% {
     box-shadow: 
       0 0 30px rgba(255, 215, 0, 1),
-      0 0 60px rgba(255, 107, 53, 0.8);
+      0 0 60px rgba(255, 107, 53, 1),
+      0 0 90px rgba(255, 107, 53, 0.7),
+      inset 0 0 20px rgba(255, 255, 255, 0.4);
   }
 }
 
-/* Per-bar hit indicator */
-.bar-hit-indicator {
+.pitch-bar-accuracy {
   position: absolute;
+  top: -30px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
-  height: 6px;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.bar-hit-indicator .hit-marker {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: #ff6b35;
-  box-shadow: 0 0 15px #ff6b35;
-}
-
-.bar-hit-indicator.on-target .hit-marker {
-  background: #4ade80;
-  box-shadow: 0 0 20px #4ade80, 0 0 40px rgba(74, 222, 128, 0.6);
-}
-
-.bar-hit-indicator.above .hit-marker {
-  background: #3b82f6;
-  box-shadow: 0 0 15px #3b82f6;
-}
-
-.bar-hit-indicator.below .hit-marker {
-  background: #ef4444;
-  box-shadow: 0 0 15px #ef4444;
-}
-
-.bar-accuracy {
-  position: absolute;
-  top: -28px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.85rem;
-  font-weight: 900;
   color: white;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
-  white-space: nowrap;
-  padding: 2px 8px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 6px;
-}
-
-.bar-accuracy.on-target {
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.2);
-}
-
-.bar-accuracy.above { color: #3b82f6; }
-.bar-accuracy.below { color: #ef4444; }
-
-/* User pitch beam - horizontal line showing where you're singing */
-.user-pitch-beam {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 4px;
-  transform: translateY(-50%);
-  z-index: 15;
-  transition: top 0.08s ease-out;
-  display: flex;
-  align-items: center;
-  pointer-events: none;
-}
-
-.user-pitch-beam::before {
-  content: '';
-  position: absolute;
-  left: 5%;
-  right: 5%;
-  height: 4px;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(255, 107, 53, 0.5) 10%,
-    rgba(255, 107, 53, 0.8) 50%,
-    rgba(255, 107, 53, 0.5) 90%,
-    transparent 100%);
-  border-radius: 2px;
-  box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);
-}
-
-.user-pitch-beam.on-target::before {
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(74, 222, 128, 0.5) 10%,
-    rgba(74, 222, 128, 0.9) 50%,
-    rgba(74, 222, 128, 0.5) 90%,
-    transparent 100%);
-  box-shadow: 0 0 25px rgba(74, 222, 128, 0.8);
-}
-
-.user-pitch-beam.above::before {
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(59, 130, 246, 0.5) 10%,
-    rgba(59, 130, 246, 0.8) 50%,
-    rgba(59, 130, 246, 0.5) 90%,
-    transparent 100%);
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
-}
-
-.user-pitch-beam.below::before {
-  background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(239, 68, 68, 0.5) 10%,
-    rgba(239, 68, 68, 0.8) 50%,
-    rgba(239, 68, 68, 0.5) 90%,
-    transparent 100%);
-  box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
-}
-
-/* Pitch orb (glowing ball at the left) */
-.pitch-orb {
-  position: absolute;
-  left: 5%;
-  transform: translateX(-50%);
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.orb-core {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #ff6b35;
-  border: 3px solid white;
-  box-shadow: 
-    0 0 15px #ff6b35,
-    0 0 30px rgba(255, 107, 53, 0.6);
-  animation: orb-pulse 0.8s ease-in-out infinite;
-  z-index: 2;
-}
-
-.user-pitch-beam.on-target .orb-core {
-  background: #4ade80;
-  box-shadow: 
-    0 0 20px #4ade80,
-    0 0 40px rgba(74, 222, 128, 0.8);
-}
-
-.user-pitch-beam.above .orb-core {
-  background: #3b82f6;
-  box-shadow: 
-    0 0 15px #3b82f6,
-    0 0 30px rgba(59, 130, 246, 0.6);
-}
-
-.user-pitch-beam.below .orb-core {
-  background: #ef4444;
-  box-shadow: 
-    0 0 15px #ef4444,
-    0 0 30px rgba(239, 68, 68, 0.6);
-}
-
-.orb-glow {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 107, 53, 0.4) 0%, transparent 70%);
-  animation: orb-glow-pulse 1.2s ease-in-out infinite;
-}
-
-.user-pitch-beam.on-target .orb-glow {
-  background: radial-gradient(circle, rgba(74, 222, 128, 0.5) 0%, transparent 70%);
-}
-
-@keyframes orb-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-}
-
-@keyframes orb-glow-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.3); }
-}
-
-/* Pitch status display */
-.pitch-status-display {
-  position: absolute;
-  left: 12%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.pitch-status-display .status-text {
-  font-size: 0.85rem;
-  font-weight: 900;
-  color: white;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-  white-space: nowrap;
-}
-
-.pitch-status-display .status-text.on-target { color: #4ade80; }
-.pitch-status-display .status-text.above { color: #3b82f6; }
-.pitch-status-display .status-text.below { color: #ef4444; }
-.pitch-status-display .status-text.neutral { color: #ff6b35; }
-
-.pitch-status-display .pitch-value {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* No pitch indicator */
-.no-pitch-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.7);
-  padding: 12px 24px;
-  border-radius: 12px;
-  border: 2px dashed rgba(255, 107, 53, 0.5);
-  z-index: 20;
-}
-
-.no-pitch-indicator span {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.8);
-  animation: mic-prompt 1.5s ease-in-out infinite;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
 }
 
-@keyframes mic-prompt {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
-/* Distance line between user pitch and target */
-.pitch-distance-line {
+/* Target pitch line (where the note should be) */
+.pitch-target-line {
   position: absolute;
+  left: 15%;
+  width: 6px;
+  height: 80px;
+  background: linear-gradient(180deg, 
+    rgba(255, 215, 0, 1) 0%, 
+    rgba(255, 215, 0, 0.9) 50%,
+    rgba(255, 215, 0, 1) 100%);
+  transform: translateX(-50%) translateY(-50%);
+  z-index: 5;
+  border-radius: 3px;
+  box-shadow: 
+    0 0 15px rgba(255, 215, 0, 1),
+    0 0 30px rgba(255, 215, 0, 0.8),
+    0 0 45px rgba(255, 215, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  animation: target-line-pulse 1.5s ease-in-out infinite;
+}
+
+.pitch-target-label {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 
+    0 0 10px rgba(255, 215, 0, 1),
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+@keyframes target-line-pulse {
+  0%, 100% {
+    opacity: 0.9;
+    box-shadow: 
+      0 0 15px rgba(255, 215, 0, 1),
+      0 0 30px rgba(255, 215, 0, 0.8),
+      0 0 45px rgba(255, 215, 0, 0.5);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 
+      0 0 20px rgba(255, 215, 0, 1),
+      0 0 40px rgba(255, 215, 0, 1),
+      0 0 60px rgba(255, 215, 0, 0.8);
+  }
+}
+
+/* Connection line between user pitch and target */
+.pitch-connection-line {
+  position: absolute;
+  left: 15%;
   width: 3px;
+  transform: translateX(-50%);
+  z-index: 4;
   background: linear-gradient(180deg, 
     rgba(255, 107, 53, 0.6) 0%,
     rgba(255, 107, 53, 0.3) 50%,
     rgba(255, 107, 53, 0.6) 100%);
   border-radius: 2px;
-  z-index: 4;
+  opacity: 0.5;
+  transition: all 0.1s ease-out;
 }
 
-.pitch-distance-line.on-target {
-  background: linear-gradient(180deg, rgba(74, 222, 128, 0.8) 0%, rgba(74, 222, 128, 0.4) 100%);
+.pitch-connection-line.on-target {
+  background: linear-gradient(180deg, 
+    rgba(74, 222, 128, 0.8) 0%,
+    rgba(74, 222, 128, 0.5) 50%,
+    rgba(74, 222, 128, 0.8) 100%);
+  opacity: 0.8;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
 }
 
-.pitch-distance-line.above {
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.6) 0%, rgba(59, 130, 246, 0.3) 100%);
+.pitch-connection-line.above {
+  background: linear-gradient(180deg, 
+    rgba(59, 130, 246, 0.6) 0%,
+    rgba(59, 130, 246, 0.3) 50%,
+    rgba(59, 130, 246, 0.6) 100%);
 }
 
-.pitch-distance-line.below {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.6) 0%, rgba(239, 68, 68, 0.3) 100%);
+.pitch-connection-line.below {
+  background: linear-gradient(180deg, 
+    rgba(239, 68, 68, 0.6) 0%,
+    rgba(239, 68, 68, 0.3) 50%,
+    rgba(239, 68, 68, 0.6) 100%);
 }
 
-.distance-label {
+/* User pitch indicator (SingStar style - shows where you're singing) */
+.user-pitch-indicator {
   position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.65rem;
+  left: 15%;
+  transform: translateX(-50%) translateY(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: top 0.1s ease-out;
+}
+
+.user-pitch-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff6b35;
+  border: 4px solid white;
+  box-shadow: 
+    0 0 20px rgba(255, 107, 53, 1),
+    0 0 40px rgba(255, 107, 53, 0.8),
+    0 0 60px rgba(255, 107, 53, 0.6);
+  animation: pitch-dot-pulse 1s ease-in-out infinite;
+  position: relative;
+  z-index: 11;
+}
+
+.user-pitch-indicator.on-target .user-pitch-dot {
+  background: #4ade80;
+  border-color: #22c55e;
+  box-shadow: 
+    0 0 20px rgba(74, 222, 128, 1),
+    0 0 40px rgba(74, 222, 128, 0.8),
+    0 0 60px rgba(74, 222, 128, 0.6);
+}
+
+.user-pitch-indicator.above .user-pitch-dot {
+  background: #3b82f6;
+  border-color: #2563eb;
+  box-shadow: 
+    0 0 15px rgba(59, 130, 246, 1),
+    0 0 30px rgba(59, 130, 246, 0.8);
+}
+
+.user-pitch-indicator.below .user-pitch-dot {
+  background: #ef4444;
+  border-color: #dc2626;
+  box-shadow: 
+    0 0 15px rgba(239, 68, 68, 1),
+    0 0 30px rgba(239, 68, 68, 0.8);
+}
+
+@keyframes pitch-dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.pitch-status-arrow {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-shadow: 
+    0 0 10px currentColor,
+    0 2px 8px rgba(0, 0, 0, 0.9);
+  animation: arrow-bounce 0.6s ease-in-out infinite;
+  white-space: nowrap;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-pitch-indicator.on-target .pitch-status-arrow {
+  color: #4ade80;
+}
+
+.user-pitch-indicator.above .pitch-status-arrow {
+  color: #3b82f6;
+}
+
+.user-pitch-indicator.below .pitch-status-arrow {
+  color: #ef4444;
+}
+
+.pitch-distance-indicator {
+  margin-top: 4px;
+  font-size: 0.7rem;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.8);
-  background: rgba(0, 0, 0, 0.6);
-  padding: 2px 6px;
-  border-radius: 4px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   white-space: nowrap;
+}
+
+.pitch-status-arrow.on-target {
+  color: #4ade80;
+  text-shadow: 
+    0 0 10px rgba(74, 222, 128, 1),
+    0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.pitch-status-arrow.above {
+  color: #3b82f6;
+  text-shadow: 
+    0 0 10px rgba(59, 130, 246, 1),
+    0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.pitch-status-arrow.below {
+  color: #ef4444;
+  text-shadow: 
+    0 0 10px rgba(239, 68, 68, 1),
+    0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+@keyframes arrow-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 
 /* Old pitch detector styles - now integrated into bottom controls */

@@ -32,6 +32,4 @@ dist-ssr
 vocals/
 *.wav
 *.mp3
-
-# Downloaded tools and binaries (FFmpeg, yt-dlp, etc.)
-tools/
+/tools

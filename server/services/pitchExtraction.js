@@ -242,7 +242,6 @@ export async function extractPitch(vocalsBuffer) {
 /**
  * Cluster pitch data into SingStar-style notes
  * Groups consecutive similar pitches into note bars
- * NOW WITH BETTER NORMALIZATION AND DISTRIBUTION
  */
 export function generateNotesFromPitch(pitchData, segments) {
   if (!pitchData || pitchData.length === 0) {
@@ -250,213 +249,262 @@ export function generateNotesFromPitch(pitchData, segments) {
     return [];
   }
 
-  console.log(`📊 [NOTES] Generating normalized notes from ${pitchData.length} pitch points...`);
+  console.log(`📊 [NOTES] Generating notes from ${pitchData.length} pitch points...`);
   
-  // Step 1: Analyze pitch range for normalization
-  const validPitches = pitchData.filter(p => p.pitch && p.pitch > 50 && p.pitch < 2000);
-  if (validPitches.length === 0) {
-    console.warn('⚠️ [NOTES] No valid pitch data found');
-    return [];
+  // Check first few pitch points for debugging
+  if (pitchData.length > 0) {
+    console.log(`   → First pitch point: time=${pitchData[0].time?.toFixed(2)}s, pitch=${pitchData[0].pitch?.toFixed(1)}Hz`);
+    if (pitchData.length > 1) {
+      const timeDiff = pitchData[1].time - pitchData[0].time;
+      console.log(`   → Time spacing between points: ${timeDiff.toFixed(2)}s`);
+    }
   }
-  
-  const allPitches = validPitches.map(p => p.pitch).sort((a, b) => a - b);
-  
-  // Use percentiles to ignore outliers
-  const p10 = allPitches[Math.floor(allPitches.length * 0.1)];
-  const p90 = allPitches[Math.floor(allPitches.length * 0.9)];
-  const medianPitch = allPitches[Math.floor(allPitches.length * 0.5)];
-  
-  console.log(`   → Pitch analysis: p10=${p10.toFixed(0)}Hz, median=${medianPitch.toFixed(0)}Hz, p90=${p90.toFixed(0)}Hz`);
-  
-  // Step 2: Use segment-aware note generation
-  // Generate notes that align with lyric segments when possible
+
   const notes = [];
-  const minNoteDuration = 0.3; // Slightly longer minimum
-  const maxNoteDuration = 4.0; // Shorter max for better rhythm
-  
-  // Use relative pitch tolerance (percentage of pitch range)
-  const pitchRange = p90 - p10;
-  const pitchTolerance = Math.max(30, pitchRange * 0.15); // 15% of range, minimum 30Hz
-  const maxTimeGap = 0.4;
+  const minNoteDuration = 0.2; // Minimum note length in seconds (lower to show more notes)
+  const maxNoteDuration = 8.0; // Maximum note length in seconds (increased for long held notes)
+  const pitchTolerance = 100; // Hz tolerance for grouping similar pitches (increased for vocal variation)
+  const maxTimeGap = 0.5; // Maximum gap in seconds before starting a new note (reduced - vocals shouldn't have big gaps)
+  const defaultNoteDuration = 0.3; // Default duration for single-point notes
 
   let currentNote = null;
-  let noteCount = 0;
+  let skippedNotes = 0;
+  let totalNotesCreated = 0;
+  let previousTime = null;
 
   for (const point of pitchData) {
     const { time, pitch } = point;
     
-    // Skip invalid or outlier pitches
-    if (!pitch || pitch < p10 * 0.8 || pitch > p90 * 1.2) {
-      if (currentNote && currentNote.duration >= minNoteDuration) {
-        notes.push(finalizeNote(currentNote));
-        noteCount++;
+    // Skip null/invalid pitches
+    if (!pitch || pitch === null || isNaN(pitch) || pitch <= 0) {
+      // If we have a current note, finish it
+      if (currentNote) {
+        // Set duration based on interval if still 0
+        if (currentNote.duration === 0 && previousTime !== null) {
+          currentNote.duration = Math.max(0.5, time - currentNote.start); // At least 0.5s
+          currentNote.end = time;
+        }
+        
+        if (currentNote.duration >= minNoteDuration) {
+          notes.push({
+            start: currentNote.start,
+            end: currentNote.end,
+            targetPitch: Math.round(currentNote.targetPitch),
+            duration: currentNote.duration,
+          });
+          totalNotesCreated++;
+        } else {
+          skippedNotes++;
+        }
+        currentNote = null;
       }
-      currentNote = null;
+      previousTime = time;
       continue;
     }
 
     if (!currentNote) {
+      // Start new note
       currentNote = {
         start: time,
         end: time,
-        pitchSum: pitch,
-        pitchCount: 1,
-        minPitch: pitch,
-        maxPitch: pitch,
+        targetPitch: pitch,
+        duration: 0,
+        pointCount: 1,
       };
     } else {
-      const avgPitch = currentNote.pitchSum / currentNote.pitchCount;
-      const pitchDiff = Math.abs(pitch - avgPitch);
+      const pitchDiff = Math.abs(pitch - currentNote.targetPitch);
       const timeGap = time - currentNote.end;
-      const currentDuration = time - currentNote.start;
       
-      // Continue note if: similar pitch, small gap, not too long
-      if (pitchDiff <= pitchTolerance && timeGap <= maxTimeGap && currentDuration < maxNoteDuration) {
+      // Extend note if pitch is similar and time gap is small
+      if (pitchDiff <= pitchTolerance && timeGap <= maxTimeGap) {
+        // Continue current note (similar pitch, close in time)
+        // Extend to current time (not just previous end)
         currentNote.end = time;
-        currentNote.pitchSum += pitch;
-        currentNote.pitchCount++;
-        currentNote.minPitch = Math.min(currentNote.minPitch, pitch);
-        currentNote.maxPitch = Math.max(currentNote.maxPitch, pitch);
+        currentNote.duration = currentNote.end - currentNote.start;
+        currentNote.pointCount++;
+        // Update target pitch to weighted average (more weight to recent pitches)
+        const weight = 0.7; // Recent pitches have 70% weight
+        currentNote.targetPitch = (currentNote.targetPitch * (1 - weight) + pitch * weight);
       } else {
-        // Finish current note
-        if (currentNote.end - currentNote.start >= minNoteDuration) {
-          notes.push(finalizeNote(currentNote));
-          noteCount++;
+        // Finish current note and start new one
+        // Extend note end to include half the gap (for smoother transitions)
+        if (currentNote.duration === 0) {
+          // Single point note - extend forward
+          currentNote.end = time;
+          currentNote.duration = Math.min(time - currentNote.start, defaultNoteDuration);
+        } else if (timeGap > 0 && timeGap < maxTimeGap * 2) {
+          // Small gap - extend note slightly forward
+          currentNote.end = currentNote.start + currentNote.duration + (timeGap * 0.3);
+          currentNote.duration = currentNote.end - currentNote.start;
         }
         
-        // Start new note
+        // Cap duration at max
+        if (currentNote.duration > maxNoteDuration) {
+          currentNote.duration = maxNoteDuration;
+          currentNote.end = currentNote.start + maxNoteDuration;
+        }
+        
+        if (currentNote.duration >= minNoteDuration) {
+          notes.push({
+            start: currentNote.start,
+            end: currentNote.end,
+            targetPitch: Math.round(currentNote.targetPitch),
+            duration: currentNote.duration,
+          });
+          totalNotesCreated++;
+        } else {
+          skippedNotes++;
+        }
+        
         currentNote = {
           start: time,
           end: time,
-          pitchSum: pitch,
-          pitchCount: 1,
-          minPitch: pitch,
-          maxPitch: pitch,
+          targetPitch: pitch,
+          duration: 0,
+          pointCount: 1,
         };
       }
     }
-  }
-
-  // Finalize last note
-  if (currentNote && currentNote.end - currentNote.start >= minNoteDuration) {
-    notes.push(finalizeNote(currentNote));
-  }
-
-  function finalizeNote(note) {
-    const avgPitch = note.pitchSum / note.pitchCount;
-    const duration = Math.max(minNoteDuration, note.end - note.start);
     
-    return {
-      start: parseFloat(note.start.toFixed(3)),
-      end: parseFloat((note.start + duration).toFixed(3)),
-      duration: parseFloat(duration.toFixed(3)),
-      targetPitch: Math.round(avgPitch),
-      confidence: note.pitchCount, // More samples = more confident
-    };
+    previousTime = time;
   }
 
-  console.log(`   → Generated ${notes.length} raw notes`);
+  // Add final note
+  if (currentNote) {
+    // Set duration based on interval if still 0 (single point note)
+    if (currentNote.duration === 0) {
+      if (previousTime !== null && previousTime > currentNote.start) {
+        currentNote.duration = Math.min(previousTime - currentNote.start + defaultNoteDuration, defaultNoteDuration * 2);
+        currentNote.end = currentNote.start + currentNote.duration;
+      } else {
+        currentNote.duration = defaultNoteDuration;
+        currentNote.end = currentNote.start + defaultNoteDuration;
+      }
+    }
+    
+    // Cap duration at max
+    if (currentNote.duration > maxNoteDuration) {
+      currentNote.duration = maxNoteDuration;
+      currentNote.end = currentNote.start + maxNoteDuration;
+    }
+    
+    if (currentNote.duration >= minNoteDuration) {
+      notes.push({
+        start: currentNote.start,
+        end: currentNote.end,
+        targetPitch: Math.round(currentNote.targetPitch),
+        duration: currentNote.duration,
+      });
+      totalNotesCreated++;
+    } else {
+      skippedNotes++;
+    }
+  }
+
+  console.log(`✅ Generated ${notes.length} raw notes from ${pitchData.length} pitch points`);
+  if (skippedNotes > 0) {
+    console.log(`   ⚠️ Skipped ${skippedNotes} notes that were too short (< ${minNoteDuration}s)`);
+  }
   
-  // Step 3: Sort and remove overlaps
+  // CRITICAL: Make notes non-overlapping and sequential (human voice can only sing one note at a time)
+  // Sort notes by start time
   notes.sort((a, b) => a.start - b.start);
   
-  const cleanNotes = [];
+  // Merge overlapping notes and ensure sequential timeline
+  const sequentialNotes = [];
+  let mergedNote = null;
+  
   for (const note of notes) {
-    if (cleanNotes.length === 0) {
-      cleanNotes.push({ ...note });
+    if (!mergedNote) {
+      // First note
+      mergedNote = { ...note };
     } else {
-      const prev = cleanNotes[cleanNotes.length - 1];
-      if (note.start >= prev.end) {
-        // No overlap
-        cleanNotes.push({ ...note });
-      } else if (note.start >= prev.start) {
-        // Overlap - keep the one with higher confidence, or merge
-        if (note.confidence > prev.confidence * 1.5) {
-          // New note is much more confident - shorten previous
-          prev.end = note.start;
-          prev.duration = prev.end - prev.start;
-          if (prev.duration >= minNoteDuration) {
-            cleanNotes.push({ ...note });
-          } else {
-            cleanNotes.pop();
-            cleanNotes.push({ ...note });
-          }
-        } else {
-          // Keep previous, extend it to cover both
-          prev.end = Math.max(prev.end, note.end);
-          prev.duration = prev.end - prev.start;
-          prev.targetPitch = Math.round((prev.targetPitch + note.targetPitch) / 2);
-        }
+      // Check if this note overlaps with or is close to merged note
+      const gap = note.start - mergedNote.end;
+      const overlap = note.start < mergedNote.end;
+      
+      if (overlap || gap < 0.1) {
+        // Overlapping or very close - merge them (take average pitch, extend duration)
+        const totalDuration = Math.max(mergedNote.end, note.end) - mergedNote.start;
+        const currentWeight = mergedNote.duration / (mergedNote.duration + note.duration);
+        const newPitch = Math.round(mergedNote.targetPitch * currentWeight + note.targetPitch * (1 - currentWeight));
+        
+        mergedNote.end = Math.max(mergedNote.end, note.end);
+        mergedNote.duration = totalDuration;
+        mergedNote.targetPitch = newPitch;
+      } else {
+        // Gap between notes - finish current and start new
+        sequentialNotes.push(mergedNote);
+        mergedNote = { ...note };
       }
     }
   }
   
-  // Step 4: Ensure notes are well-distributed and have good variety
-  // Remove notes that are too close together (keep more spaced notes)
-  const spacedNotes = [];
-  const minSpacing = 0.5; // Minimum gap between notes
+  // Add final note
+  if (mergedNote) {
+    sequentialNotes.push(mergedNote);
+  }
   
-  for (const note of cleanNotes) {
-    if (spacedNotes.length === 0) {
-      spacedNotes.push(note);
-    } else {
-      const lastNote = spacedNotes[spacedNotes.length - 1];
-      const gap = note.start - lastNote.end;
-      
-      if (gap >= 0) {
-        // No overlap, add the note
-        spacedNotes.push(note);
+  // Ensure notes are truly sequential (no overlaps, small gaps allowed)
+  const finalNotes = [];
+  for (let i = 0; i < sequentialNotes.length; i++) {
+    const note = { ...sequentialNotes[i] };
+    
+    if (i > 0) {
+      // Make sure this note starts where previous ended (no overlaps)
+      const prevNote = finalNotes[i - 1];
+      if (note.start < prevNote.end) {
+        // Overlap - start this note where previous ends
+        note.start = prevNote.end;
       }
-    }
-  }
-  
-  // Step 5: Cap total notes per segment for performance
-  // If using segments, distribute notes across them
-  let finalNotes = spacedNotes;
-  
-  if (segments && segments.length > 0) {
-    console.log(`   → Distributing notes across ${segments.length} segments...`);
-    const notesPerSegment = [];
-    
-    for (const segment of segments) {
-      const segStart = Number(segment.start) || 0;
-      const segEnd = Number(segment.end) || segStart + 5;
-      
-      // Find notes in this segment
-      const segNotes = finalNotes.filter(n => 
-        n.start < segEnd && n.end > segStart
-      );
-      
-      // Keep up to 6 notes per segment, prefer higher confidence
-      segNotes.sort((a, b) => (b.confidence || 1) - (a.confidence || 1));
-      notesPerSegment.push(...segNotes.slice(0, 6));
+      // If there's a gap, we keep it (silence between notes is OK)
     }
     
-    // Remove duplicates and sort
-    const seen = new Set();
-    finalNotes = notesPerSegment
-      .filter(n => {
-        const key = `${n.start}-${n.end}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a, b) => a.start - b.start);
+    // Ensure valid duration
+    if (note.end <= note.start) {
+      note.end = note.start + minNoteDuration;
+      note.duration = minNoteDuration;
+    } else {
+      note.duration = note.end - note.start;
+    }
+    
+    finalNotes.push(note);
   }
   
-  console.log(`✅ Final: ${finalNotes.length} notes`);
+  console.log(`✅ Created ${finalNotes.length} sequential notes (non-overlapping timeline)`);
   
   if (finalNotes.length > 0) {
-    const pitches = finalNotes.map(n => n.targetPitch);
-    console.log(`   → Pitch range: ${Math.min(...pitches)}Hz - ${Math.max(...pitches)}Hz`);
-    console.log(`   → Duration range: ${Math.min(...finalNotes.map(n => n.duration)).toFixed(2)}s - ${Math.max(...finalNotes.map(n => n.duration)).toFixed(2)}s`);
-    console.log(`   → Time span: ${finalNotes[0].start.toFixed(2)}s - ${finalNotes[finalNotes.length - 1].end.toFixed(2)}s`);
+    console.log(`   → Note duration range: ${Math.min(...finalNotes.map(n => n.duration)).toFixed(2)}s - ${Math.max(...finalNotes.map(n => n.duration)).toFixed(2)}s`);
+    console.log(`   → Pitch range: ${Math.min(...finalNotes.map(n => n.targetPitch))}Hz - ${Math.max(...finalNotes.map(n => n.targetPitch))}Hz`);
+    console.log(`   → Time range: ${finalNotes[0].start.toFixed(2)}s - ${finalNotes[finalNotes.length - 1].end.toFixed(2)}s`);
     
-    // Log sample notes
-    console.log(`   → Sample notes:`);
-    finalNotes.slice(0, 5).forEach((n, i) => {
-      console.log(`      [${i}] ${n.start.toFixed(2)}s-${n.end.toFixed(2)}s: ${n.targetPitch}Hz`);
+    // Check for overlaps
+    let hasOverlaps = false;
+    for (let i = 1; i < finalNotes.length; i++) {
+      if (finalNotes[i].start < finalNotes[i - 1].end) {
+        hasOverlaps = true;
+        console.warn(`   ⚠️ Overlap detected: note ${i} starts at ${finalNotes[i].start.toFixed(2)}s but previous ends at ${finalNotes[i - 1].end.toFixed(2)}s`);
+      }
+    }
+    if (!hasOverlaps) {
+      console.log(`   ✅ No overlaps - notes form clean timeline`);
+    }
+    
+    // Log first 5 notes for debugging
+    console.log(`   → First 5 sequential notes:`);
+    finalNotes.slice(0, 5).forEach((note, idx) => {
+      console.log(`      [${idx}] ${note.start.toFixed(2)}s-${note.end.toFixed(2)}s (${note.duration.toFixed(2)}s): ${note.targetPitch}Hz`);
     });
+    
+    // Check alignment with segments if provided
+    if (segments && segments.length > 0) {
+      const firstSegment = segments[0];
+      const lastSegment = segments[segments.length - 1];
+      console.log(`   → Segments time range: ${firstSegment.start?.toFixed(2)}s - ${lastSegment.end?.toFixed(2)}s`);
+    }
+  } else {
+    console.warn(`   ⚠️ [NOTES] No notes generated! This might indicate pitch detection issues.`);
+    console.warn(`   → Check if pitch data has valid values (not all null/zero)`);
   }
   
   return finalNotes;

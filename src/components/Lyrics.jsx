@@ -59,9 +59,11 @@ export default function Lyrics({ segments, currentTime }) {
     }
   }, [currentIdx, currentTime, segments]);
 
-  // Get current and next segments
+  // Get previous, current, and next segments for better context
+  const previous = displayedIdx > 0 && segments[displayedIdx - 1] ? segments[displayedIdx - 1] : null;
   const current = displayedIdx >= 0 && segments[displayedIdx] ? segments[displayedIdx] : null;
   const next = displayedIdx >= 0 && segments[displayedIdx + 1] ? segments[displayedIdx + 1] : null;
+  const nextNext = displayedIdx >= 0 && segments[displayedIdx + 2] ? segments[displayedIdx + 2] : null;
 
   if (!current) {
     return null;
@@ -69,6 +71,14 @@ export default function Lyrics({ segments, currentTime }) {
 
   return (
     <div className="lyrics-container">
+      {previous && (
+        <div 
+          key={`previous-${displayedIdx - 1}`}
+          className="lyric-line previous"
+        >
+          {previous.text || ''}
+        </div>
+      )}
       <div 
         key={`current-${displayedIdx}`}
         className="lyric-line current"
@@ -81,6 +91,14 @@ export default function Lyrics({ segments, currentTime }) {
           className="lyric-line next"
         >
           {next.text || ''}
+        </div>
+      )}
+      {nextNext && (
+        <div 
+          key={`next-next-${displayedIdx + 2}`}
+          className="lyric-line next-next"
+        >
+          {nextNext.text || ''}
         </div>
       )}
     </div>

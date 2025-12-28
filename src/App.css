@@ -1176,7 +1176,7 @@
   );
   backdrop-filter: blur(2px);
   pointer-events: none;
-  z-index: 10;
+  z-index: 3;
 }
 
 .game-lyrics-container .lyrics-container {

@@ -82,6 +82,7 @@ export default function Home() {
       <main className="app-main">
         <div className="song-selector">
           <h2>Search for a Song</h2>
+          <p className="hero-subtitle">Find your favorite songs and test your singing skills</p>
           <div className="search-container">
             <input
               type="text"

@@ -70,11 +70,27 @@ export default function Home() {
     fetchSuggestedSongs();
   }, []);
 
-  const handleSelectSong = (video) => {
-    // Navigate immediately to show loading screen
+  const handleSelectSong = async (video) => {
     const title = encodeURIComponent(video.title || 'Unknown');
     const channel = encodeURIComponent(video.channel || 'Unknown');
-    navigate(`/game/${channel}/${title}?id=${video.id}`);
+    
+    // Check if song exists in database
+    try {
+      const response = await fetch(`${API_BASE_URL}/getSong?youtubeId=${video.id}`);
+      const data = await response.json();
+      
+      if (data.cached) {
+        // Song exists, navigate directly to game
+        navigate(`/game/${channel}/${title}?id=${video.id}`);
+      } else {
+        // Song doesn't exist, navigate to loading page
+        navigate(`/loading-song/${channel}/${title}?id=${video.id}`);
+      }
+    } catch (error) {
+      console.error('Error checking if song exists:', error);
+      // On error, assume song doesn't exist and go to loading page
+      navigate(`/loading-song/${channel}/${title}?id=${video.id}`);
+    }
   };
 
   return (

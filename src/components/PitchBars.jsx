@@ -1,7 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 
 export default function PitchBars({ segments, currentTime, userPitch, notes }) {
   const WINDOW_DURATION = 5; // Show 5 seconds of notes at a time
+  
+  // Track fill progress for each bar
+  const barFillsRef = useRef({});
   
   // Use real notes if available
   const pitchBars = useMemo(() => {
@@ -17,16 +20,9 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
     return [];
   }, [notes]);
 
-  // Calculate the current window start time (snaps to 5-second intervals based on content)
+  // Calculate the current window start time
   const windowStart = useMemo(() => {
     if (!currentTime || pitchBars.length === 0) return 0;
-    
-    // Find the first bar that contains or is after current time
-    const currentOrNextBar = pitchBars.find(bar => bar.end >= currentTime);
-    if (!currentOrNextBar) return currentTime;
-    
-    // Window starts at the beginning of the current bar's phrase
-    // Or snap to 5-second windows
     const windowIndex = Math.floor(currentTime / WINDOW_DURATION);
     return windowIndex * WINDOW_DURATION;
   }, [currentTime, pitchBars]);
@@ -34,46 +30,56 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
   // Find bars visible in the current window
   const visibleBars = useMemo(() => {
     if (pitchBars.length === 0) return [];
-    
     const windowEnd = windowStart + WINDOW_DURATION;
-    
     return pitchBars.filter(bar => 
       bar.start < windowEnd && bar.end > windowStart
     );
   }, [pitchBars, windowStart]);
 
-  // Calculate pitch to vertical position
-  const pitchToPosition = (pitch) => {
-    const minPitch = 100;
-    const maxPitch = 600;
+  // Calculate pitch to vertical position (inverted - higher pitch = higher on screen)
+  const pitchToPosition = useCallback((pitch) => {
+    const minPitch = 80;
+    const maxPitch = 800;
     const trackHeight = 200;
     const margin = 20;
     const usableHeight = trackHeight - margin * 2;
     
     const clampedPitch = Math.max(minPitch, Math.min(maxPitch, pitch));
     const pitchPercent = (clampedPitch - minPitch) / (maxPitch - minPitch);
+    // Higher pitch = lower Y value (higher on screen)
     return trackHeight - margin - (pitchPercent * usableHeight);
-  };
+  }, []);
 
   // Get user pitch position
-  const userPitchPosition = useMemo(() => {
+  const userPitchY = useMemo(() => {
     if (!userPitch) return null;
     return pitchToPosition(userPitch);
-  }, [userPitch]);
+  }, [userPitch, pitchToPosition]);
 
-  // Find active bar (for highlighting user pitch indicator)
-  const activeBar = useMemo(() => {
-    if (!currentTime || visibleBars.length === 0) return null;
-    return visibleBars.find(bar => 
-      currentTime >= bar.start && currentTime < bar.end
-    ) || null;
-  }, [visibleBars, currentTime]);
+  // Update bar fills when user is singing
+  const updateBarFills = useCallback(() => {
+    if (!userPitch || !currentTime) return;
+    
+    pitchBars.forEach(bar => {
+      if (currentTime >= bar.start && currentTime <= bar.end) {
+        const progress = ((currentTime - bar.start) / bar.duration) * 100;
+        
+        if (!barFillsRef.current[bar.id]) {
+          barFillsRef.current[bar.id] = { maxProgress: 0 };
+        }
+        
+        // Only update if we've progressed further
+        if (progress > barFillsRef.current[bar.id].maxProgress) {
+          barFillsRef.current[bar.id].maxProgress = progress;
+        }
+      }
+    });
+  }, [currentTime, userPitch, pitchBars]);
 
-  // Check if user is on target
-  const isOnTarget = useMemo(() => {
-    if (!userPitch || !activeBar) return false;
-    return Math.abs(userPitch - activeBar.targetPitch) <= 50;
-  }, [userPitch, activeBar]);
+  // Call update on each render when singing
+  if (userPitch && currentTime) {
+    updateBarFills();
+  }
 
   return (
     <div className="pitch-bars-container">
@@ -88,90 +94,57 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
           />
         )}
         
-        {/* User's voice indicator - ALWAYS shows where they're singing in real-time */}
-        {userPitch && userPitchPosition !== null && (
+        {/* User's voice indicator - always shows where they're singing */}
+        {userPitch && userPitchY !== null && (
           <div 
-            className={`user-voice-indicator ${isOnTarget ? 'on-target' : ''}`}
+            className="user-voice-indicator"
             style={{
-              top: `${userPitchPosition}px`,
+              top: `${userPitchY}px`,
               left: `${((currentTime - windowStart) / WINDOW_DURATION) * 100}%`,
             }}
           />
         )}
         
-        {/* Render the note bars - STATIC positions within the 5-second window */}
+        {/* Render the note bars */}
         {visibleBars.map((bar) => {
           const barHeight = 30;
           
-          // Position based on time within the window (0% to 100%)
+          // Position based on time within the window
           const barStartPercent = Math.max(0, ((bar.start - windowStart) / WINDOW_DURATION) * 100);
           const barEndPercent = Math.min(100, ((bar.end - windowStart) / WINDOW_DURATION) * 100);
           const barWidth = barEndPercent - barStartPercent;
           
           // Vertical position based on pitch
-          const barCenterY = pitchToPosition(bar.targetPitch);
-          const topPosition = barCenterY - barHeight / 2;
+          const barY = pitchToPosition(bar.targetPitch);
+          const topPosition = barY - barHeight / 2;
           
-          const isActive = activeBar?.id === bar.id;
+          // Check if currently active
+          const isActive = currentTime >= bar.start && currentTime < bar.end;
           
-          // Calculate fill - shows user's pitch position relative to the bar
-          let fillPercent = 0;
-          let fillTop = 0;
-          let fillHeight = 0;
-          let fillClass = '';
+          // Get fill progress
+          const storedFill = barFillsRef.current[bar.id]?.maxProgress || 0;
           
-          if (isActive && userPitch && currentTime >= bar.start && currentTime <= bar.end) {
-            // User is singing during this bar - fill progresses with time
-            const progress = (currentTime - bar.start) / bar.duration;
-            fillPercent = Math.min(100, progress * 100);
+          // Calculate current fill if active
+          let fillPercent = storedFill;
+          let showFill = storedFill > 0;
+          let fillOffsetY = 0;
+          let isOnTarget = false;
+          
+          if (isActive && userPitch) {
+            // Calculate progress through the bar
+            const progress = ((currentTime - bar.start) / bar.duration) * 100;
+            fillPercent = Math.max(fillPercent, progress);
+            showFill = true;
             
-            // Calculate where user's pitch is relative to the bar center
-            const userPitchY = userPitchPosition;
-            const barTop = barCenterY - barHeight / 2;
-            const barBottom = barCenterY + barHeight / 2;
+            // Calculate offset based on pitch difference
             const pitchDiff = userPitch - bar.targetPitch;
-            const tolerance = 50; // Hz tolerance for "on target"
+            const tolerance = 80; // Hz tolerance for "on target"
             
-            if (Math.abs(pitchDiff) <= tolerance) {
-              // On target - fill the bar itself
-              fillTop = 0;
-              fillHeight = barHeight;
-              fillClass = 'on-target';
-            } else if (pitchDiff > 0) {
-              // Too high - fill extends from bar top upward to user's pitch
-              const distanceAbove = userPitchY - barTop;
-              fillTop = -distanceAbove;
-              fillHeight = distanceAbove + barHeight;
-              fillClass = 'above';
-            } else {
-              // Too low - fill extends from bar bottom downward to user's pitch
-              const distanceBelow = barBottom - userPitchY;
-              fillTop = 0;
-              fillHeight = barHeight + distanceBelow;
-              fillClass = 'below';
-            }
-          } else if (isActive && userPitch && currentTime > bar.end) {
-            // Bar finished - show final state
-            const pitchDiff = userPitch - bar.targetPitch;
-            fillPercent = 100;
-            if (Math.abs(pitchDiff) <= 50) {
-              fillTop = 0;
-              fillHeight = barHeight;
-              fillClass = 'on-target';
-            } else if (pitchDiff > 0) {
-              const userPitchY = userPitchPosition;
-              const barTop = barCenterY - barHeight / 2;
-              const distanceAbove = userPitchY - barTop;
-              fillTop = -distanceAbove;
-              fillHeight = distanceAbove + barHeight;
-              fillClass = 'above';
-            } else {
-              const userPitchY = userPitchPosition;
-              const barBottom = barCenterY + barHeight / 2;
-              const distanceBelow = barBottom - userPitchY;
-              fillTop = 0;
-              fillHeight = barHeight + distanceBelow;
-              fillClass = 'below';
+            isOnTarget = Math.abs(pitchDiff) <= tolerance;
+            
+            if (!isOnTarget) {
+              // Show fill at user's pitch position relative to bar
+              fillOffsetY = barY - userPitchY; // Positive if singing higher
             }
           }
 
@@ -186,14 +159,14 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
                 height: `${barHeight}px`,
               }}
             >
-              {/* Orange fill - shows where user's pitch is (in bar, above, or below) */}
-              {fillPercent > 0 && userPitch && (
+              {/* Fill that shows user's singing */}
+              {showFill && fillPercent > 0 && (
                 <div 
-                  className={`pitch-bar-fill ${fillClass}`}
+                  className={`pitch-bar-fill ${isOnTarget ? 'on-target' : ''}`}
                   style={{
                     width: `${fillPercent}%`,
-                    top: `${fillTop}px`,
-                    height: `${fillHeight}px`,
+                    height: `${barHeight}px`,
+                    top: isActive && userPitch ? `${-fillOffsetY}px` : '0px',
                   }}
                 />
               )}

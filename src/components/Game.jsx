@@ -483,23 +483,26 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
 
       {/* Game Content Overlay */}
       <div className="game-content">
-        {/* Top Bar - Time (left), Back (center) */}
+        {/* Top Bar - Time only */}
         <div className="game-top-bar">
           <div className="game-time-display">
             <span className="time-current">{formatTime(currentTime)}</span>
             <span className="time-separator">/</span>
             <span className="time-total">{formatTime(duration)}</span>
           </div>
-          
-          <button onClick={onBack} className="back-button">
-            ← Back
-          </button>
         </div>
 
-        {/* Score - Top Left */}
+        {/* Score - Top Left with Back Button */}
         <div className="game-score-top-left">
-          <span className="score-label">SCORE</span>
-          <span className="score-value">{Math.floor(score)}</span>
+          <button onClick={onBack} className="back-button" aria-label="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <div className="game-score-content">
+            <span className="score-label">SCORE</span>
+            <span className="score-value">{Math.floor(score)}</span>
+          </div>
         </div>
 
         {/* Pitch Bars in Center */}

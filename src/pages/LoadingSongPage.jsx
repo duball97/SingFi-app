@@ -10,13 +10,17 @@ export default function LoadingSongPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const videoId = searchParams.get('id');
-  const { addLoadingSong, updateSongStatus } = useSongLoading();
+  const { addLoadingSong, updateSongStatus, loadingSongs } = useSongLoading();
   
   const [randomSongs, setRandomSongs] = useState([]);
   const [loadingRandom, setLoadingRandom] = useState(true);
 
   const title = decodeURIComponent(urlTitle || 'Unknown');
   const artist = decodeURIComponent(channel || 'Unknown');
+  
+  // Check if current song is ready
+  const currentSongStatus = videoId ? loadingSongs[videoId]?.status : null;
+  const isSongReady = currentSongStatus === 'completed';
 
   // Start background processing
   useEffect(() => {
@@ -87,14 +91,38 @@ export default function LoadingSongPage() {
     fetchRandomSongs();
   }, []);
 
-  const handleSelectSong = (song) => {
+  const handleSelectSong = async (song) => {
     const titleEncoded = encodeURIComponent(song.title || 'Unknown');
     const channelEncoded = encodeURIComponent(song.channel || 'Unknown');
-    navigate(`/game/${channelEncoded}/${titleEncoded}?id=${song.id}`);
+    
+    // Check if song exists in database (should always be true for random songs, but check to be safe)
+    try {
+      const response = await fetch(`${API_BASE_URL}/getSong?youtubeId=${song.id}`);
+      const data = await response.json();
+      
+      if (data.cached) {
+        // Song exists, navigate directly to game (will load instantly)
+        navigate(`/game/${channelEncoded}/${titleEncoded}?id=${song.id}`);
+      } else {
+        // Song doesn't exist (shouldn't happen for random songs), navigate to loading page
+        navigate(`/loading-song/${channelEncoded}/${titleEncoded}?id=${song.id}`);
+      }
+    } catch (error) {
+      console.error('Error checking if song exists:', error);
+      // On error, navigate to game anyway (it will handle it)
+      navigate(`/game/${channelEncoded}/${titleEncoded}?id=${song.id}`);
+    }
   };
 
   const handleGoHome = () => {
     navigate('/');
+  };
+
+  const handlePlayReadySong = () => {
+    if (!videoId) return;
+    const titleEncoded = encodeURIComponent(title);
+    const channelEncoded = encodeURIComponent(artist);
+    navigate(`/game/${channelEncoded}/${titleEncoded}?id=${videoId}`);
   };
 
   return (
@@ -111,6 +139,21 @@ export default function LoadingSongPage() {
             <div className="song-artist">by {artist}</div>
           )}
         </div>
+
+        {isSongReady && (
+          <div className="song-ready-section">
+            <div className="song-ready-message">
+              <span className="ready-icon">✓</span>
+              <div className="ready-text">
+                <div className="ready-title">Your song is ready!</div>
+                <div className="ready-subtitle">Click below to start playing</div>
+              </div>
+            </div>
+            <button onClick={handlePlayReadySong} className="play-ready-button">
+              ▶ Play Now
+            </button>
+          </div>
+        )}
 
         {loadingRandom ? (
           <div className="random-songs-loading">

@@ -2,7 +2,7 @@ import { useSongLoading } from '../contexts/SongLoadingContext';
 import './SongLoadingIndicator.css';
 
 export default function SongLoadingIndicator() {
-  const { loadingSongs } = useSongLoading();
+  const { loadingSongs, removeLoadingSong } = useSongLoading();
 
   const loadingSongsArray = Object.entries(loadingSongs).map(([youtubeId, data]) => ({
     youtubeId,
@@ -12,6 +12,11 @@ export default function SongLoadingIndicator() {
   if (loadingSongsArray.length === 0) {
     return null;
   }
+
+  const handleRemove = (e, youtubeId) => {
+    e.stopPropagation();
+    removeLoadingSong(youtubeId);
+  };
 
   return (
     <div className="song-loading-indicator">
@@ -27,6 +32,14 @@ export default function SongLoadingIndicator() {
           <div className="loading-song-text">
             {title || 'Loading song...'}
           </div>
+          <button
+            className="loading-song-close"
+            onClick={(e) => handleRemove(e, youtubeId)}
+            aria-label="Close"
+            title="Dismiss"
+          >
+            ×
+          </button>
         </div>
       ))}
     </div>

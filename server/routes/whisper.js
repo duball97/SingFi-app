@@ -615,29 +615,33 @@ router.post("/", async (req, res) => {
     }
     console.log(`🎵 [PITCH EXTRACTION] Complete\n`);
 
-    // STEP 5 — Save segments and notes to database (ONLY if pitch extraction succeeded)
-    if (pitchExtractionSucceeded && notes && notes.length > 0) {
-      console.log('💾 [SAVE] Saving to database (pitch extraction succeeded)...');
-      await supabase
-        .from("singfi_songs")
-        .upsert(
-          {
-            youtube_id: youtubeId,
-            title: title || null,
-            artist: artist || null,
-            lyrics: fullText,
-            segments: rawSegments, // Use raw Whisper segments
-            notes: notes, // Notes extracted from isolated vocals (vocals-only pitch)
-            thumbnail: thumbnailStoragePath, // Thumbnail path in Storage or YouTube URL
-            owner: owner || null, // User UUID for RLS (optional for now)
-          },
-          { onConflict: "youtube_id" }
-        );
+    // STEP 5 — Save segments and notes to database
+    // Save even if pitch extraction failed - can retry pitch extraction later
+    console.log('💾 [SAVE] Saving to database...');
+    const { error: saveError } = await supabase
+      .from("singfi_songs")
+      .upsert(
+        {
+          youtube_id: youtubeId,
+          title: title || null,
+          artist: artist || null,
+          lyrics: fullText,
+          segments: rawSegments, // Use raw Whisper segments
+          notes: notes || null, // Notes extracted from isolated vocals (null if pitch extraction failed)
+          thumbnail: thumbnailStoragePath, // Thumbnail path in Storage or YouTube URL
+          owner: owner || null, // User UUID for RLS (optional for now)
+        },
+        { onConflict: "youtube_id" }
+      );
 
-      console.log(`✅ [SAVE] Saved lyrics, segments, and notes to database`);
+    if (saveError) {
+      console.error('❌ [SAVE] Error saving to database:', saveError.message);
     } else {
-      console.warn('⚠️ [SAVE] NOT saving to database - pitch extraction failed or no notes generated');
-      console.warn('   → Song will be processed again next time (not cached)');
+      if (pitchExtractionSucceeded && notes && notes.length > 0) {
+        console.log(`✅ [SAVE] Saved lyrics, segments, and notes to database`);
+      } else {
+        console.log(`✅ [SAVE] Saved lyrics and segments to database (notes will be added later if pitch extraction retries)`);
+      }
     }
 
     console.log('✅ Game ready! Segments:', rawSegments.length, 'Lyrics length:', fullText.length);

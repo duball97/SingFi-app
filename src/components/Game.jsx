@@ -10,9 +10,11 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
   const [userPitch, setUserPitch] = useState(null);
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [gameState, setGameState] = useState('loading'); // 'loading', 'countdown', 'playing', 'paused', 'ended'
+  const [gameState, setGameState] = useState('loading'); // 'loading', 'countdown', 'playing', 'paused', 'ended', 'buffering'
   const [countdown, setCountdown] = useState(3);
   const [isMicActive, setIsMicActive] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [bufferRetryCount, setBufferRetryCount] = useState(0);
   
   // Custom timer refs
   const playbackStartTimeRef = useRef(null);
@@ -38,6 +40,11 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
       rel: 0,
       showinfo: 0,
       iv_load_policy: 3,
+      // Improve buffering for slow connections
+      enablejsapi: 1,
+      playsinline: 1,
+      // Use lower quality for better buffering (YouTube will auto-select best available)
+      // Note: YouTube doesn't allow forcing quality via API, but we can optimize settings
     },
   };
 
@@ -262,7 +269,9 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
     if (state === 1) { // PLAYING
       isPlayingRef.current = true;
       setIsPlaying(true);
-      if (gameState === 'playing' || gameState === 'paused') {
+      setIsBuffering(false);
+      setBufferRetryCount(0);
+      if (gameState === 'playing' || gameState === 'paused' || gameState === 'buffering') {
         setGameState('playing');
       }
       
@@ -287,16 +296,62 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
     if (state === 2) { // PAUSED
       isPlayingRef.current = false;
       setIsPlaying(false);
+      setIsBuffering(false);
       setGameState('paused');
       if (playbackStartTimeRef.current !== null) {
         pauseOffsetRef.current = performance.now() - playbackStartTimeRef.current;
       }
     }
 
+    if (state === 3) { // BUFFERING
+      if (gameState === 'playing') {
+        setIsBuffering(true);
+        setGameState('buffering');
+        console.log('⏳ Video buffering...');
+      }
+    }
+
     if (state === 0) { // ENDED
       isPlayingRef.current = false;
       setIsPlaying(false);
+      setIsBuffering(false);
       setGameState('ended');
+    }
+
+    if (state === -1) { // UNSTARTED
+      console.log('⏸️ Video unstarted');
+    }
+
+    if (state === 5) { // CUED
+      console.log('✅ Video cued and ready');
+    }
+  };
+
+  const handleError = (event) => {
+    const errorCode = event.data;
+    console.error('❌ YouTube player error:', errorCode);
+    
+    // Error codes: https://developers.google.com/youtube/iframe_api_reference#Events
+    // 2 = Invalid parameter value
+    // 5 = HTML5 player error
+    // 100 = Video not found
+    // 101/150 = Video not allowed to be played in embedded players
+    
+    if (errorCode === 5 || errorCode === 100 || errorCode === 101 || errorCode === 150) {
+      // Network or playback errors - try to recover
+      console.log('🔄 Attempting to recover from error...');
+      setGameState('loading');
+      
+      // Reload the video after a delay
+      setTimeout(() => {
+        if (player && player.loadVideoById) {
+          try {
+            player.loadVideoById(videoId);
+          } catch (err) {
+            console.error('Failed to reload video:', err);
+          }
+        }
+      }, 2000);
     }
   };
 
@@ -387,6 +442,7 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
           opts={opts}
           onReady={handleReady}
           onStateChange={handleStateChange}
+          onError={handleError}
           className="game-youtube-player"
         />
       </div>
@@ -427,7 +483,7 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
 
       {/* Game Content Overlay */}
       <div className="game-content">
-        {/* Top Bar - Time (left), Back, Score (right) */}
+        {/* Top Bar - Time (left), Back (center) */}
         <div className="game-top-bar">
           <div className="game-time-display">
             <span className="time-current">{formatTime(currentTime)}</span>
@@ -438,11 +494,12 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
           <button onClick={onBack} className="back-button">
             ← Back
           </button>
-          
-          <div className="game-score-display">
-            <span className="score-label">SCORE</span>
-            <span className="score-value">{Math.floor(score)}</span>
-          </div>
+        </div>
+
+        {/* Score - Top Left */}
+        <div className="game-score-top-left">
+          <span className="score-label">SCORE</span>
+          <span className="score-value">{Math.floor(score)}</span>
         </div>
 
         {/* Pitch Bars in Center */}
@@ -459,26 +516,9 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
         <div className="game-lyrics-container">
           <Lyrics segments={segments} currentTime={currentTime} />
         </div>
-        
-        {/* Pause/Resume Button - Circular icon only, 100px down from center */}
-        <button 
-          onClick={handlePauseResume}
-          className={`game-stop-button-center ${!isPlaying ? 'resume-state' : ''}`}
-          aria-label={isPlaying ? 'Pause' : 'Resume'}
-        >
-          {isPlaying ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 6h12v12H6z"/>
-            </svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          )}
-        </button>
 
-        {/* Bottom Controls - Centered */}
-        <div className="game-bottom-controls">
+        {/* Top Controls - Top Right */}
+        <div className="game-top-controls">
           {/* Play/Pause Button */}
           <button 
             onClick={handlePlayPause}

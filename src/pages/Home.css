@@ -3,34 +3,9 @@
 .app {
   min-height: 100vh;
   padding: 2rem;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0f0f0f 100%);
+  background: #000000;
   position: relative;
   overflow-x: hidden;
-}
-
-.app::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 50%, rgba(255, 107, 53, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(255, 107, 53, 0.12) 0%, transparent 50%),
-    radial-gradient(circle at 50% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-  animation: backgroundShift 20s ease-in-out infinite;
-}
-
-@keyframes backgroundShift {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
 }
 
 .app > * {

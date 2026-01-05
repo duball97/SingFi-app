@@ -927,7 +927,7 @@
 /* Game Top Bar - Only time display now */
 .game-top-bar {
   position: fixed;
-  top: 5rem; /* Position below header (header is ~80px tall) */
+  top: calc(5rem + 10px); /* Position below header (header is ~80px tall) + 10px */
   left: 0;
   right: 0;
   z-index: 100;
@@ -967,7 +967,7 @@
 /* Score - Top Left with Back Button */
 .game-score-top-left {
   position: fixed;
-  top: 6rem; /* Position below header (header is ~80px tall) */
+  top: calc(6rem + 10px); /* Position below header (header is ~80px tall) + 10px */
   left: 2rem;
   z-index: 100;
   display: flex;
@@ -1042,7 +1042,7 @@
 /* Top Controls - Top Right */
 .game-top-controls {
   position: fixed;
-  top: 6rem; /* Position below header (header is ~80px tall) */
+  top: calc(6rem + 10px); /* Position below header (header is ~80px tall) + 10px */
   right: 2rem;
   z-index: 100;
   display: flex;
@@ -1279,7 +1279,7 @@
 }
 
 .game-lyrics-container .lyric-line {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   line-height: 1.2;
   color: rgba(255, 255, 255, 0.3);
   margin: 0;
@@ -1298,14 +1298,14 @@
 }
 
 .game-lyrics-container .lyric-line.previous {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   opacity: 0.2;
   transform: translateY(10px) scale(0.9);
   color: rgba(255, 255, 255, 0.15);
 }
 
 .game-lyrics-container .lyric-line.current {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 900;
   opacity: 1;
   color: #ffffff;
@@ -1350,7 +1350,7 @@
 }
 
 .game-lyrics-container .lyric-line.next {
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   opacity: 0.6;
   color: rgba(255, 255, 255, 0.7);
   transform: translateY(-5px) scale(0.95);
@@ -1422,7 +1422,7 @@
   min-width: 30px;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(255, 107, 53, 0.5);
-  border-radius: 6px;
+  border-radius: 15px;
   z-index: 1;
   overflow: visible;
 }
@@ -1439,7 +1439,8 @@
 .pitch-bar-fill {
   position: absolute;
   left: 0;
-  border-radius: 4px;
+  top: 0;
+  border-radius: 13px;
   background: linear-gradient(90deg, 
     rgba(255, 107, 53, 1) 0%, 
     rgba(255, 140, 60, 0.95) 100%);
@@ -1448,7 +1449,7 @@
     0 0 16px rgba(255, 107, 53, 0.6);
   z-index: 3;
   min-width: 3px;
-  transition: top 0.05s ease-out;
+  will-change: transform, width;
 }
 
 /* On target - gold/yellow glow */
@@ -1471,6 +1472,7 @@
   border-radius: 50%;
   transform: translate(-50%, -50%);
   z-index: 20;
+  will-change: left, top;
   box-shadow: 
     0 0 15px rgba(255, 107, 53, 1),
     0 0 30px rgba(255, 107, 53, 0.8),
@@ -1494,6 +1496,8 @@
     rgba(255, 255, 255, 1) 50%,
     rgba(255, 215, 0, 0.8) 100%
   );
+  transform: translateX(-50%);
+  will-change: left;
   box-shadow: 
     0 0 10px rgba(255, 215, 0, 0.8),
     0 0 20px rgba(255, 215, 0, 0.5);

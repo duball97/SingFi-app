@@ -1,5 +1,8 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 
+// Pitch tolerance for "on target" - higher value = easier to hit notes
+const PITCH_TOLERANCE = 150; // Hz tolerance (increased from 80 for easier gameplay)
+
 export default function PitchBars({ segments, currentTime, userPitch, notes }) {
   const WINDOW_DURATION = 5; // Show 5 seconds of notes at a time
   
@@ -108,7 +111,13 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
     return pitchToPosition(userPitch);
   }, [userPitch]);
 
-  // Smooth animation loop using requestAnimationFrame
+  // Reset fill state when notes change
+  useEffect(() => {
+    barFillsRef.current = {};
+    forceUpdate(prev => prev + 1);
+  }, [notes]);
+
+  // Smooth animation loop using requestAnimationFrame - tracks partial fills
   useEffect(() => {
     if (!userPitch || !currentTime) {
       if (animationFrameRef.current) {
@@ -120,6 +129,7 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
 
     let lastUpdateTime = 0;
     const UPDATE_INTERVAL = 16; // ~60fps
+    const FILL_CHECK_INTERVAL = 0.016; // Check every ~16ms (60fps) for fast-paced songs
     
     const animate = (timestamp) => {
       // Throttle updates to ~60fps
@@ -129,26 +139,60 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
       }
       lastUpdateTime = timestamp;
       
-      // Update fills only for active bars
+      // Update fills only for active bars - only fill when on target
       let needsUpdate = false;
       
       pitchBars.forEach(bar => {
         if (currentTime >= bar.start && currentTime <= bar.end) {
-          const progress = ((currentTime - bar.start) / bar.duration) * 100;
+          // Check if user is on target
+          const pitchDiff = Math.abs(userPitch - bar.targetPitch);
+          const isOnTarget = pitchDiff <= PITCH_TOLERANCE;
           
           if (!barFillsRef.current[bar.id]) {
-            barFillsRef.current[bar.id] = { maxProgress: 0 };
+            barFillsRef.current[bar.id] = { 
+              filledSegments: [],
+              lastCheckedTime: bar.start,
+              wasOnTarget: false
+            };
           }
           
-          // Only update if we've progressed further (with small threshold to reduce updates)
-          if (progress > barFillsRef.current[bar.id].maxProgress + 0.5) {
-            barFillsRef.current[bar.id].maxProgress = progress;
+          const fillState = barFillsRef.current[bar.id];
+          const timeSinceLastCheck = currentTime - fillState.lastCheckedTime;
+          
+          // For fast-paced songs, always update fills when on target
+          // Only use interval for reducing computation when not on target
+          if (isOnTarget) {
+            // Always update fill when on target for smooth, responsive fills
+            const lastSegment = fillState.filledSegments[fillState.filledSegments.length - 1];
+            const gapTolerance = 0.05; // 50ms gap tolerance
+            
+            if (lastSegment && lastSegment.end >= fillState.lastCheckedTime - gapTolerance) {
+              // Extend existing segment to current time
+              lastSegment.end = currentTime;
+            } else {
+              // Start new segment - use lastCheckedTime as start to avoid gaps
+              const segmentStart = fillState.wasOnTarget 
+                ? fillState.lastCheckedTime 
+                : Math.max(bar.start, fillState.lastCheckedTime);
+              fillState.filledSegments.push({
+                start: segmentStart,
+                end: currentTime
+              });
+            }
             needsUpdate = true;
+            fillState.wasOnTarget = true;
+            fillState.lastCheckedTime = currentTime;
+          } else {
+            // Not on target - only update lastCheckedTime at intervals to reduce computation
+            if (timeSinceLastCheck >= FILL_CHECK_INTERVAL) {
+              fillState.wasOnTarget = false;
+              fillState.lastCheckedTime = currentTime;
+            }
           }
         }
       });
       
-      // Only force update if something changed
+      // Force update more frequently to show fills in real-time
       if (needsUpdate) {
         forceUpdate(prev => prev + 1);
       }
@@ -206,31 +250,15 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
           // Check if currently active
           const isActive = currentTime >= bar.start && currentTime < bar.end;
           
-          // Get fill progress
-          const storedFill = barFillsRef.current[bar.id]?.maxProgress || 0;
+          // Get filled segments for this bar
+          const fillState = barFillsRef.current[bar.id];
+          const filledSegments = fillState?.filledSegments || [];
           
-          // Calculate current fill if active
-          let fillPercent = storedFill;
-          let showFill = storedFill > 0;
-          let fillOffsetY = 0;
-          let isOnTarget = false;
-          
+          // Check if currently on target (for real-time indicator)
+          let isCurrentlyOnTarget = false;
           if (isActive && userPitch) {
-            // Calculate progress through the bar
-            const progress = ((currentTime - bar.start) / bar.duration) * 100;
-            fillPercent = Math.max(fillPercent, progress);
-            showFill = true;
-            
-            // Calculate offset based on pitch difference
-            const pitchDiff = userPitch - bar.targetPitch;
-            const tolerance = 80; // Hz tolerance for "on target"
-            
-            isOnTarget = Math.abs(pitchDiff) <= tolerance;
-            
-            if (!isOnTarget) {
-              // Show fill at user's pitch position relative to bar
-              fillOffsetY = barY - userPitchY; // Positive if singing higher
-            }
+            const pitchDiff = Math.abs(userPitch - bar.targetPitch);
+            isCurrentlyOnTarget = pitchDiff <= PITCH_TOLERANCE;
           }
 
           return (
@@ -244,14 +272,43 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
                 height: `${barHeight}px`,
               }}
             >
-              {/* Fill that shows user's singing */}
-              {showFill && fillPercent > 0 && (
+              {/* Render filled segments - only parts where user was on target */}
+              {filledSegments.map((segment, segIdx) => {
+                // Calculate segment position and width within the bar
+                const segmentStartPercent = ((segment.start - bar.start) / bar.duration) * 100;
+                const segmentEndPercent = ((segment.end - bar.start) / bar.duration) * 100;
+                const segmentWidth = segmentEndPercent - segmentStartPercent;
+                
+                // Clamp to bar bounds
+                const clampedStart = Math.max(0, Math.min(100, segmentStartPercent));
+                const clampedEnd = Math.max(0, Math.min(100, segmentEndPercent));
+                const clampedWidth = clampedEnd - clampedStart;
+                
+                if (clampedWidth <= 0) return null;
+                
+                return (
+                  <div
+                    key={segIdx}
+                    className="pitch-bar-fill on-target"
+                    style={{
+                      left: `${clampedStart}%`,
+                      width: `${clampedWidth}%`,
+                      height: `${barHeight}px`,
+                      top: '0px',
+                    }}
+                  />
+                );
+              })}
+              
+              {/* Real-time fill indicator if currently on target */}
+              {isActive && isCurrentlyOnTarget && userPitch && (
                 <div 
-                  className={`pitch-bar-fill ${isOnTarget ? 'on-target' : ''}`}
+                  className="pitch-bar-fill on-target realtime"
                   style={{
-                    width: `${fillPercent}%`,
+                    left: `${((currentTime - bar.start) / bar.duration) * 100}%`,
+                    width: '2px',
                     height: `${barHeight}px`,
-                    top: isActive && userPitch ? `${-fillOffsetY}px` : '0px',
+                    top: '0px',
                   }}
                 />
               )}

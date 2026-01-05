@@ -118,6 +118,14 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
     }
   }, []);
 
+  // Store currentTime in ref for pitch detection
+  const currentTimeRef = useRef(0);
+  
+  // Update ref when currentTime changes
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
   // Pitch detection loop
   const detectPitch = useCallback(() => {
     try {
@@ -155,7 +163,30 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
         const frequency = sampleRate / maxPeriod;
         if (frequency > 80 && frequency < 2000) {
           setUserPitch(frequency);
-          setScore(prev => prev + 0.1);
+          
+          // Only award score if user is on target for an active note
+          const currentTimeValue = currentTimeRef.current;
+          if (notes && Array.isArray(notes) && notes.length > 0 && currentTimeValue) {
+            // Find active note (note that contains currentTime)
+            const activeNote = notes.find(note => 
+              currentTimeValue >= note.start && currentTimeValue <= note.end
+            );
+            
+            if (activeNote) {
+              // Calculate accuracy based on pitch difference
+              const pitchDiff = Math.abs(frequency - activeNote.targetPitch);
+              const tolerance = 80; // Hz tolerance
+              
+              if (pitchDiff <= tolerance) {
+                // Award score based on accuracy (more accurate = more points)
+                const accuracy = 1 - (pitchDiff / tolerance); // 1.0 when perfect, 0.0 at edge of tolerance
+                const points = 0.1 * accuracy; // Base 0.1 points, scaled by accuracy
+                setScore(prev => prev + points);
+              }
+              // If not on target, no points awarded
+            }
+            // If no active note, no points awarded
+          }
         }
       }
 
@@ -461,7 +492,7 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
       {gameState === 'loading' && (
         <div className="countdown-overlay">
           <div className="loading-spinner"></div>
-          <div className="countdown-text">Loading video...</div>
+          <div className="countdown-text">Loading Song...</div>
         </div>
       )}
 

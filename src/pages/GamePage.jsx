@@ -13,6 +13,7 @@ export default function GamePage() {
   const [segments, setSegments] = useState([]);
   const [lyrics, setLyrics] = useState('');
   const [notes, setNotes] = useState(null);
+  const [firstVerseStartTime, setFirstVerseStartTime] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadingMessage, setLoadingMessage] = useState('Downloading audio...');
@@ -75,15 +76,37 @@ export default function GamePage() {
         }
 
         const data = await response.json();
-        setSegments(data.segments || []);
+        
+        // Validate segments - check if transcription is mostly instrumental symbols
+        const segments = data.segments || [];
+        const hasValidSegments = segments.length > 0 && segments.some(seg => {
+          const text = (seg.text || '').trim();
+          const instrumentalSymbols = ['♪', '♫', '♬', '♩', '♭', '♮', '♯'];
+          // Check if segment has actual text (not just instrumental symbols)
+          return text.length > 0 && !instrumentalSymbols.some(symbol => 
+            text === symbol || text === symbol + symbol || text.includes(symbol) && text.replace(new RegExp(symbol, 'g'), '').trim().length === 0
+          );
+        });
+        
+        if (!hasValidSegments && segments.length > 0) {
+          // Segments are mostly instrumental - this shouldn't happen if backend is working correctly
+          // but if it does, throw error to keep loading state
+          throw new Error('Song transcription is invalid. Please try again.');
+        }
+        
+        setSegments(segments);
         setLyrics(data.lyrics || '');
         setNotes(data.notes || null);
+        setFirstVerseStartTime(data.firstVerseStartTime || null);
         
         if (data.cached) {
           console.log('✅ Loaded from cache - instant!');
         }
         if (data.notes) {
           console.log('🎵 Real pitch notes loaded:', data.notes.length);
+        }
+        if (data.firstVerseStartTime) {
+          console.log('🎵 First verse starts at:', data.firstVerseStartTime, 'seconds');
         }
       } catch (err) {
         setError(err.message);
@@ -156,6 +179,7 @@ export default function GamePage() {
       segments={segments}
       lyrics={lyrics}
       notes={notes}
+      firstVerseStartTime={firstVerseStartTime}
       onBack={handleBack}
     />
   );

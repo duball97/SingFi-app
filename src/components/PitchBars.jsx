@@ -3,7 +3,7 @@ import { useMemo, useRef, useEffect, useState } from 'react';
 // Pitch tolerance for "on target" - higher value = easier to hit notes
 const PITCH_TOLERANCE = 150; // Hz tolerance (increased from 80 for easier gameplay)
 
-export default function PitchBars({ segments, currentTime, userPitch, notes }) {
+export default function PitchBars({ segments, currentTime, userPitch, notes, firstVerseStartTime }) {
   const WINDOW_DURATION = 5; // Show 5 seconds of notes at a time
   
   // Track fill progress for each bar
@@ -11,10 +11,19 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
   const animationFrameRef = useRef(null);
   const [, forceUpdate] = useState(0);
   
-  // Use real notes if available
+  // Use real notes if available, filtered by first verse start time
   const pitchBars = useMemo(() => {
     if (notes && Array.isArray(notes) && notes.length > 0) {
-      return notes.map((note, index) => ({
+      let filteredNotes = notes;
+      
+      // Filter out notes before first verse starts
+      if (firstVerseStartTime !== null && firstVerseStartTime !== undefined) {
+        filteredNotes = notes.filter(note => 
+          note.start >= firstVerseStartTime
+        );
+      }
+      
+      return filteredNotes.map((note, index) => ({
         id: `note-${index}`,
         start: note.start,
         end: note.end,
@@ -23,15 +32,29 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
       }));
     }
     return [];
-  }, [notes]);
+  }, [notes, firstVerseStartTime]);
+
+  // Filter segments to only include those after first verse starts
+  const filteredSegments = useMemo(() => {
+    if (!segments?.length) return [];
+    
+    if (firstVerseStartTime !== null && firstVerseStartTime !== undefined) {
+      return segments.filter(seg => {
+        const start = Number(seg.start) || 0;
+        return start >= firstVerseStartTime;
+      });
+    }
+    
+    return segments;
+  }, [segments, firstVerseStartTime]);
 
   // Find the current lyrics segment being displayed
   const currentSegment = useMemo(() => {
-    if (!segments || segments.length === 0 || !currentTime) return null;
+    if (!filteredSegments || filteredSegments.length === 0 || !currentTime) return null;
     
     // Find the segment that contains currentTime
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
+    for (let i = 0; i < filteredSegments.length; i++) {
+      const seg = filteredSegments[i];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
       
@@ -41,16 +64,16 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
     }
     
     // If no exact match, find the last segment that has started
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const start = Number(segments[i].start) || 0;
+    for (let i = filteredSegments.length - 1; i >= 0; i--) {
+      const start = Number(filteredSegments[i].start) || 0;
       if (currentTime >= start) {
-        const end = Number(segments[i].end) || 0;
+        const end = Number(filteredSegments[i].end) || 0;
         return { start, end, index: i };
       }
     }
     
     return null;
-  }, [segments, currentTime]);
+  }, [filteredSegments, currentTime]);
 
   // Calculate window duration - use segment duration if available
   const windowDuration = useMemo(() => {
@@ -159,15 +182,14 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
           const fillState = barFillsRef.current[bar.id];
           const timeSinceLastCheck = currentTime - fillState.lastCheckedTime;
           
-          // For fast-paced songs, always update fills when on target
-          // Only use interval for reducing computation when not on target
+          // Always update fills when on target for real-time smooth fills
           if (isOnTarget) {
             // Always update fill when on target for smooth, responsive fills
             const lastSegment = fillState.filledSegments[fillState.filledSegments.length - 1];
             const gapTolerance = 0.05; // 50ms gap tolerance
             
             if (lastSegment && lastSegment.end >= fillState.lastCheckedTime - gapTolerance) {
-              // Extend existing segment to current time
+              // Extend existing segment to current time - this creates smooth continuous fills
               lastSegment.end = currentTime;
             } else {
               // Start new segment - use lastCheckedTime as start to avoid gaps
@@ -183,16 +205,14 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
             fillState.wasOnTarget = true;
             fillState.lastCheckedTime = currentTime;
           } else {
-            // Not on target - only update lastCheckedTime at intervals to reduce computation
-            if (timeSinceLastCheck >= FILL_CHECK_INTERVAL) {
-              fillState.wasOnTarget = false;
-              fillState.lastCheckedTime = currentTime;
-            }
+            // Not on target - update lastCheckedTime to track progress
+            fillState.wasOnTarget = false;
+            fillState.lastCheckedTime = currentTime;
           }
         }
       });
       
-      // Force update more frequently to show fills in real-time
+      // Update every frame for smooth, real-time fills
       if (needsUpdate) {
         forceUpdate(prev => prev + 1);
       }
@@ -300,18 +320,29 @@ export default function PitchBars({ segments, currentTime, userPitch, notes }) {
                 );
               })}
               
-              {/* Real-time fill indicator if currently on target */}
-              {isActive && isCurrentlyOnTarget && userPitch && (
-                <div 
-                  className="pitch-bar-fill on-target realtime"
-                  style={{
-                    left: `${((currentTime - bar.start) / bar.duration) * 100}%`,
-                    width: '2px',
-                    height: `${barHeight}px`,
-                    top: '0px',
-                  }}
-                />
-              )}
+              {/* Real-time fill extension - smoothly extends the last segment when on target */}
+              {isActive && isCurrentlyOnTarget && userPitch && (() => {
+                const lastSegment = filledSegments[filledSegments.length - 1];
+                const fillStartPercent = lastSegment 
+                  ? ((lastSegment.end - bar.start) / bar.duration) * 100
+                  : 0;
+                const fillEndPercent = ((currentTime - bar.start) / bar.duration) * 100;
+                const fillWidth = Math.max(0, fillEndPercent - fillStartPercent);
+                
+                if (fillWidth <= 0) return null;
+                
+                return (
+                  <div 
+                    className="pitch-bar-fill on-target realtime"
+                    style={{
+                      left: `${fillStartPercent}%`,
+                      width: `${fillWidth}%`,
+                      height: `${barHeight}px`,
+                      top: '0px',
+                    }}
+                  />
+                );
+              })()}
             </div>
           );
         })}

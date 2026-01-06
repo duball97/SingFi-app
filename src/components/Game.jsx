@@ -3,7 +3,7 @@ import YouTube from 'react-youtube';
 import Lyrics from './Lyrics';
 import PitchBars from './PitchBars';
 
-export default function Game({ videoId, segments, lyrics, notes, onBack }) {
+export default function Game({ videoId, segments, lyrics, notes, firstVerseStartTime, onBack }) {
   const [player, setPlayer] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -66,7 +66,25 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
         await audioContextRef.current.close().catch(() => {});
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request microphone with echo cancellation and noise suppression
+      // These constraints help filter out PC audio and background noise
+      const audioConstraints = {
+        echoCancellation: true,      // Cancel echo from speakers (most important!)
+        noiseSuppression: true,      // Suppress background noise
+        autoGainControl: true,       // Auto-adjust microphone gain
+        // Chrome-specific constraints (will be ignored by other browsers)
+        ...(navigator.userAgent.includes('Chrome') && {
+          googEchoCancellation: true,
+          googNoiseSuppression: true,
+          googAutoGainControl: true,
+          googHighpassFilter: true,    // Filter out low frequencies
+          googTypingNoiseDetection: true,
+        })
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints
+      });
       streamRef.current = stream;
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const analyser = audioContext.createAnalyser();
@@ -120,11 +138,39 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
 
   // Store currentTime in ref for pitch detection
   const currentTimeRef = useRef(0);
+  const scoreAccumulatorRef = useRef(0);
+  const lastScoreUpdateRef = useRef(Date.now()); // Initialize to current time for immediate first update
   
   // Update ref when currentTime changes
   useEffect(() => {
     currentTimeRef.current = currentTime;
   }, [currentTime]);
+
+  // Flush score accumulator when game ends
+  useEffect(() => {
+    if (gameState === 'ended') {
+      // Flush any remaining accumulated score
+      if (scoreAccumulatorRef.current > 0) {
+        setScore(prev => prev + scoreAccumulatorRef.current);
+        scoreAccumulatorRef.current = 0;
+      }
+    }
+  }, [gameState]);
+
+  // Periodic flush of score accumulator to ensure updates even during brief pauses
+  useEffect(() => {
+    if (gameState === 'playing' && isMicActive) {
+      const flushInterval = setInterval(() => {
+        if (scoreAccumulatorRef.current > 0) {
+          setScore(prev => prev + scoreAccumulatorRef.current);
+          scoreAccumulatorRef.current = 0;
+          lastScoreUpdateRef.current = Date.now();
+        }
+      }, 200); // Flush every 200ms to ensure score updates
+
+      return () => clearInterval(flushInterval);
+    }
+  }, [gameState, isMicActive]);
 
   // Pitch detection loop
   const detectPitch = useCallback(() => {
@@ -144,6 +190,21 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
       const bufferLength = analyserRef.current.fftSize;
       const data = new Float32Array(bufferLength);
       analyserRef.current.getFloatTimeDomainData(data);
+
+      // Calculate RMS (Root Mean Square) to detect volume/amplitude
+      let sumSquares = 0;
+      for (let i = 0; i < data.length; i++) {
+        sumSquares += data[i] * data[i];
+      }
+      const rms = Math.sqrt(sumSquares / data.length);
+      const volumeThreshold = 0.01; // Minimum volume threshold to filter out background PC audio
+      
+      // Only process pitch if volume is above threshold (user is actually singing)
+      if (rms < volumeThreshold) {
+        setUserPitch(null);
+        micAnimationRef.current = requestAnimationFrame(detectPitch);
+        return;
+      }
 
       let maxCorrelation = 0;
       let maxPeriod = 0;
@@ -175,13 +236,29 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
             if (activeNote) {
               // Calculate accuracy based on pitch difference
               const pitchDiff = Math.abs(frequency - activeNote.targetPitch);
-              const tolerance = 80; // Hz tolerance
+              const tolerance = 150; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
               
               if (pitchDiff <= tolerance) {
-                // Award score based on accuracy (more accurate = more points)
+                // Award score based on accuracy and time (accounts for partial fills)
+                // More accurate = more points, scaled by time elapsed
                 const accuracy = 1 - (pitchDiff / tolerance); // 1.0 when perfect, 0.0 at edge of tolerance
-                const points = 0.1 * accuracy; // Base 0.1 points, scaled by accuracy
-                setScore(prev => prev + points);
+                // Award points per second when on target
+                // Using requestAnimationFrame timing (~16-17ms per frame at 60fps)
+                const timeWeight = 0.016; // ~16ms per frame
+                const points = 50 * accuracy * timeWeight; // 50 points/sec when perfect, scaled by accuracy (increased for visibility)
+                
+                // Accumulate score to ensure partial fills are counted
+                scoreAccumulatorRef.current += points;
+                
+                // Update score state every ~50ms for more responsive updates
+                const now = Date.now();
+                if (now - lastScoreUpdateRef.current >= 50) {
+                  if (scoreAccumulatorRef.current > 0) {
+                    setScore(prev => prev + scoreAccumulatorRef.current);
+                    scoreAccumulatorRef.current = 0;
+                  }
+                  lastScoreUpdateRef.current = now;
+                }
               }
               // If not on target, no points awarded
             }
@@ -463,6 +540,36 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
     }
   };
 
+  const jumpToFirstVerse = () => {
+    if (!player || firstVerseStartTime === null || firstVerseStartTime === undefined) return;
+    
+    try {
+      // Seek to first verse start time
+      player.seekTo(firstVerseStartTime, true);
+      console.log(`⏩ Jumped to first verse at ${firstVerseStartTime.toFixed(2)}s`);
+      
+      // Update current time immediately
+      setCurrentTime(firstVerseStartTime);
+      currentTimeRef.current = firstVerseStartTime;
+      
+      // Reset playback tracking to sync with new position
+      if (isPlaying) {
+        playbackStartTimeRef.current = performance.now() - (firstVerseStartTime * 1000);
+        pauseOffsetRef.current = firstVerseStartTime;
+      } else {
+        pauseOffsetRef.current = firstVerseStartTime;
+      }
+      
+      // If not playing, start playing
+      if (!isPlaying) {
+        player.playVideo();
+        startMicrophone();
+      }
+    } catch (error) {
+      console.error('Error jumping to first verse:', error);
+    }
+  };
+
   return (
     <div className="game-page">
       {/* Video Background */}
@@ -539,20 +646,39 @@ export default function Game({ videoId, segments, lyrics, notes, onBack }) {
         {/* Pitch Bars in Center */}
         <div className="game-pitch-bars-container">
           <PitchBars 
-            segments={segments} 
-            currentTime={currentTime} 
+            segments={segments}
+            currentTime={currentTime}
             userPitch={userPitch}
             notes={notes}
+            firstVerseStartTime={firstVerseStartTime}
           />
         </div>
 
         {/* Lyrics at Bottom */}
         <div className="game-lyrics-container">
-          <Lyrics segments={segments} currentTime={currentTime} />
+          <Lyrics 
+            segments={segments} 
+            currentTime={currentTime}
+            firstVerseStartTime={firstVerseStartTime}
+          />
         </div>
 
         {/* Top Controls - Top Right */}
         <div className="game-top-controls">
+          {/* Jump to First Verse Button */}
+          {firstVerseStartTime !== null && firstVerseStartTime !== undefined && (
+            <button 
+              onClick={jumpToFirstVerse}
+              className="control-button jump-button"
+              aria-label="Jump to beginning of song"
+              title={`Jump to first verse (${firstVerseStartTime.toFixed(1)}s)`}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 18l8.5-6-8.5-6v12zm-.5-6l-8.5-6v12l8.5-6z"/>
+              </svg>
+            </button>
+          )}
+
           {/* Play/Pause Button */}
           <button 
             onClick={handlePlayPause}

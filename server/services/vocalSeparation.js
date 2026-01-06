@@ -77,6 +77,29 @@ export async function separateVocals(audioBuffer, youtubeId) {
       console.log(`   → [GETTING VOCALS] Download complete in ${downloadTime}s`);
       console.log(`   → [GETTING VOCALS] Vocals size: ${(vocalsBuffer.length / 1024 / 1024).toFixed(2)}MB`);
       
+      // Validate vocals buffer - check if it's too small or likely empty
+      const minVocalsSize = 10000; // ~10KB minimum for a valid WAV file
+      if (vocalsBuffer.length < minVocalsSize) {
+        throw new Error(`Vocals file too small (${vocalsBuffer.length} bytes) - likely empty or corrupted`);
+      }
+      
+      // Check if vocals buffer appears to be silent/empty by sampling audio data
+      // WAV files have a header (typically 44 bytes), then audio data
+      // Sample some audio data to see if it's all zeros (silent)
+      if (vocalsBuffer.length > 100) {
+        const sampleStart = 100; // Skip WAV header
+        const sampleEnd = Math.min(sampleStart + 1000, vocalsBuffer.length);
+        const sample = vocalsBuffer.slice(sampleStart, sampleEnd);
+        const hasAudio = sample.some(byte => byte !== 0 && byte !== 128); // Check for non-zero/non-midpoint values
+        
+        if (!hasAudio) {
+          console.warn(`   ⚠️ [VALIDATION] Vocals buffer appears to be silent/empty`);
+          throw new Error('Vocals appear to be silent or empty after separation');
+        }
+      }
+      
+      console.log(`   ✅ [VALIDATION] Vocals buffer validated - contains audio data`);
+      
       // Save vocals provisionally to vocals folder
       const vocalsFilePath = join(vocalsDir, `${youtubeId}.wav`);
       try {

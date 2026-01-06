@@ -11,6 +11,7 @@ create table singfi_songs (
   notes jsonb, -- SingStar note chart for pitch bars (optional, for future use)
   vocals text, -- Path to vocals file in Supabase Storage (e.g., "youtubeId.wav")
   thumbnail text, -- Path to thumbnail in Supabase Storage or YouTube URL
+  first_verse_start_time numeric, -- Start time of first verse (filters out intros/talking)
   owner uuid, -- User UUID for Row-Level Security (null = public/shared)
   created_at timestamp default now()
 );

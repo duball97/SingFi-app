@@ -1,32 +1,46 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 
-export default function Lyrics({ segments, currentTime }) {
+export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
   const lastIdxRef = useRef(-1);
   const [displayedIdx, setDisplayedIdx] = useState(-1);
   const segmentsLoggedRef = useRef(false);
   
+  // Filter segments to only include those after first verse starts
+  const filteredSegments = useMemo(() => {
+    if (!segments?.length) return [];
+    
+    if (firstVerseStartTime !== null && firstVerseStartTime !== undefined) {
+      return segments.filter(seg => {
+        const start = Number(seg.start) || 0;
+        return start >= firstVerseStartTime;
+      });
+    }
+    
+    return segments;
+  }, [segments, firstVerseStartTime]);
+  
   // Log all segments once when they're loaded
   useEffect(() => {
-    if (segments?.length && !segmentsLoggedRef.current) {
-      console.log('🎵 ALL SEGMENTS WITH TIMES:');
-      segments.forEach((seg, idx) => {
+    if (filteredSegments?.length && !segmentsLoggedRef.current) {
+      console.log('🎵 FILTERED SEGMENTS WITH TIMES (after first verse):');
+      filteredSegments.forEach((seg, idx) => {
         const start = Number(seg.start) || 0;
         const end = Number(seg.end) || 0;
         console.log(`  [${idx}] ${start.toFixed(2)}s - ${end.toFixed(2)}s (${(end - start).toFixed(2)}s): "${seg.text}"`);
       });
       segmentsLoggedRef.current = true;
     }
-  }, [segments]);
+  }, [filteredSegments]);
   
   // Only calculate the INDEX, not the full objects
   const currentIdx = useMemo(() => {
-    if (!segments?.length || currentTime === undefined || currentTime === null) {
+    if (!filteredSegments?.length || currentTime === undefined || currentTime === null) {
       return -1;
     }
 
     // Find the segment where currentTime is between start and end
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
+    for (let i = 0; i < filteredSegments.length; i++) {
+      const seg = filteredSegments[i];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
       
@@ -36,15 +50,15 @@ export default function Lyrics({ segments, currentTime }) {
     }
 
     // If no exact match, find the last segment that has started
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const start = Number(segments[i].start) || 0;
+    for (let i = filteredSegments.length - 1; i >= 0; i--) {
+      const start = Number(filteredSegments[i].start) || 0;
       if (currentTime >= start) {
         return i;
       }
     }
 
     return 0;
-  }, [segments, currentTime]);
+  }, [filteredSegments, currentTime]);
 
   // Only update state when index actually changes, and log here
   useEffect(() => {
@@ -57,12 +71,12 @@ export default function Lyrics({ segments, currentTime }) {
       lastIdxRef.current = currentIdx;
       setDisplayedIdx(currentIdx);
     }
-  }, [currentIdx, currentTime, segments]);
+  }, [currentIdx, currentTime, filteredSegments]);
 
   // Get previous, current, and next segments for better context
-  const previous = displayedIdx > 0 && segments[displayedIdx - 1] ? segments[displayedIdx - 1] : null;
-  const current = displayedIdx >= 0 && segments[displayedIdx] ? segments[displayedIdx] : null;
-  const next = displayedIdx >= 0 && segments[displayedIdx + 1] ? segments[displayedIdx + 1] : null;
+  const previous = displayedIdx > 0 && filteredSegments[displayedIdx - 1] ? filteredSegments[displayedIdx - 1] : null;
+  const current = displayedIdx >= 0 && filteredSegments[displayedIdx] ? filteredSegments[displayedIdx] : null;
+  const next = displayedIdx >= 0 && filteredSegments[displayedIdx + 1] ? filteredSegments[displayedIdx + 1] : null;
 
   if (!current) {
     return null;

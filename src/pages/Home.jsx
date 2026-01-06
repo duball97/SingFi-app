@@ -8,6 +8,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [isArtistSearch, setIsArtistSearch] = useState(false);
   const [suggestedSongs, setSuggestedSongs] = useState([]);
   const [loadingSuggested, setLoadingSuggested] = useState(true);
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export default function Home() {
   const handleSearch = async (query) => {
     if (!query.trim()) {
       setSearchResults([]);
+      setIsArtistSearch(false);
       return;
     }
 
@@ -38,6 +40,7 @@ export default function Home() {
 
       const data = await response.json();
       setSearchResults(data.videos || []);
+      setIsArtistSearch(data.isArtistSearch || false);
     } catch (err) {
       console.error('Search error:', err);
       alert(err.message || 'Failed to search. Please make sure the backend server is running.');
@@ -99,6 +102,9 @@ export default function Home() {
         <div className="song-selector">
           <h2>Search for a Song</h2>
           <p className="hero-subtitle">Find your favorite songs and test your singing skills</p>
+          <p className="hero-description">
+            Search by artist name to discover their popular songs, or search for a specific song title to start singing right away!
+          </p>
           <div className="search-container">
             <input
               type="text"
@@ -123,8 +129,10 @@ export default function Home() {
 
           {searchResults.length > 0 && (
             <div className="search-results">
-              <h3>Search Results:</h3>
-              <div className="results-list">
+              <h3>
+                {isArtistSearch ? `Songs by ${searchQuery}` : 'Search Results'}
+              </h3>
+              <div className={isArtistSearch ? 'results-list artist-results' : 'results-list'}>
                 {searchResults.map((video) => (
                   <div
                     key={video.id}
@@ -150,6 +158,13 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Hint text in bottom right - only show for artist searches */}
+          {isArtistSearch && searchResults.length > 0 && (
+            <div className="search-hint">
+              <p>You can also search for a specific song</p>
             </div>
           )}
 

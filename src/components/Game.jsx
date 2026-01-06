@@ -3,7 +3,9 @@ import YouTube from 'react-youtube';
 import Lyrics from './Lyrics';
 import PitchBars from './PitchBars';
 
-export default function Game({ videoId, segments, lyrics, notes, firstVerseStartTime, onBack }) {
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+export default function Game({ videoId, segments, lyrics, notes, firstVerseStartTime, user, onBack }) {
   const [player, setPlayer] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -146,16 +148,66 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
     currentTimeRef.current = currentTime;
   }, [currentTime]);
 
-  // Flush score accumulator when game ends
+  // Track game session data
+  const gameStartTimeRef = useRef(null);
+  const notesHitRef = useRef(0);
+  const notesTotalRef = useRef(0);
+  const sessionSavedRef = useRef(false);
+
+  // Initialize notes tracking when notes change
   useEffect(() => {
-    if (gameState === 'ended') {
+    if (notes && Array.isArray(notes)) {
+      // Reset tracking flags for all notes
+      notes.forEach(note => {
+        note._tracked = false;
+        note._hit = false;
+      });
+      notesTotalRef.current = 0;
+      notesHitRef.current = 0;
+      sessionSavedRef.current = false;
+    }
+  }, [notes]);
+
+  // Flush score accumulator and save game session when game ends
+  useEffect(() => {
+    if (gameState === 'ended' && !sessionSavedRef.current) {
+      sessionSavedRef.current = true;
+      
       // Flush any remaining accumulated score
+      const finalScore = score + scoreAccumulatorRef.current;
       if (scoreAccumulatorRef.current > 0) {
-        setScore(prev => prev + scoreAccumulatorRef.current);
+        setScore(finalScore);
         scoreAccumulatorRef.current = 0;
       }
+
+      // Save game session if user is logged in
+      if (user && videoId) {
+        const durationSeconds = gameStartTimeRef.current 
+          ? (Date.now() - gameStartTimeRef.current) / 1000 
+          : null;
+        
+        const accuracy = notesTotalRef.current > 0 
+          ? (notesHitRef.current / notesTotalRef.current) * 100 
+          : null;
+
+        fetch(`${API_BASE_URL}/game-session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            youtubeId: videoId,
+            score: finalScore,
+            accuracy: accuracy,
+            notesHit: notesHitRef.current,
+            notesTotal: notesTotalRef.current,
+            durationSeconds: durationSeconds,
+          }),
+        }).catch(err => {
+          console.error('Error saving game session:', err);
+        });
+      }
     }
-  }, [gameState]);
+  }, [gameState, user, videoId, score]);
 
   // Periodic flush of score accumulator to ensure updates even during brief pauses
   useEffect(() => {
@@ -345,6 +397,10 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
     } else {
       // Countdown finished - start the game!
       setGameState('playing');
+      // Track game start time
+      if (!gameStartTimeRef.current) {
+        gameStartTimeRef.current = Date.now();
+      }
       startMicrophone();
       
       // Wait for player to be fully ready, then play
@@ -381,6 +437,10 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       setBufferRetryCount(0);
       if (gameState === 'playing' || gameState === 'paused' || gameState === 'buffering') {
         setGameState('playing');
+        // Track game start time
+        if (!gameStartTimeRef.current) {
+          gameStartTimeRef.current = Date.now();
+        }
       }
       
       try {

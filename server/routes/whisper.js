@@ -543,59 +543,52 @@ router.post("/", async (req, res) => {
 
     const openai = getOpenAI();
 
-    // STEP 2: Run Whisper + Demucs IN PARALLEL (biggest time saver!)
-    console.log("\n⚡ [PARALLEL PROCESSING] Running Whisper + Demucs in parallel...");
-    const parallelStart = Date.now();
+    // STEP 2: Run Demucs first, then transcribe vocals if available, otherwise original audio
+    console.log("\n⚡ [VOCAL SEPARATION] Starting vocal separation (Demucs)...");
+    const demucsStart = Date.now();
+    const vocalsResult = await separateVocals(wavBuffer, youtubeId).catch((error) => {
+      console.warn("⚠️ [DEMUCS] Vocal separation failed:", error.message);
+      console.warn("   → This might happen with heavily processed/autotuned vocals or certain music styles");
+      return null;
+    });
     
-    const [transcription, vocalsResult] = await Promise.all([
-      // Whisper transcription
-      (async () => {
-        console.log("🎤 [WHISPER] Starting Whisper transcription...");
-        const whisperStart = Date.now();
-        const result = await openai.audio.transcriptions.create({
-          file: new File([wavBuffer], "audio.wav", { type: "audio/wav" }),
-          model: "whisper-1",
-          response_format: "verbose_json",
-        });
-        const whisperTime = ((Date.now() - whisperStart) / 1000).toFixed(1);
-        console.log(`✅ [WHISPER] Transcription complete in ${whisperTime}s`);
-        return result;
-      })(),
+    let vocalsBuffer = null;
+    if (vocalsResult?.vocals) {
+      const demucsTime = ((Date.now() - demucsStart) / 1000).toFixed(1);
+      console.log(`✅ [DEMUCS] Vocals isolated successfully in ${demucsTime}s`);
       
-      // Vocal separation with Demucs
-      (async () => {
-        console.log("🎤 [DEMUCS] Starting vocal separation (Demucs)...");
-        const demucsStart = Date.now();
-        const result = await separateVocals(wavBuffer, youtubeId).catch((error) => {
-          console.warn("⚠️ [DEMUCS] Vocal separation failed:", error.message);
-          console.warn("   → This might happen with heavily processed/autotuned vocals or certain music styles");
-          return null;
-        });
-        if (result?.vocals) {
-          const demucsTime = ((Date.now() - demucsStart) / 1000).toFixed(1);
-          console.log(`✅ [DEMUCS] Vocals isolated successfully in ${demucsTime}s`);
-          
-          // Additional validation: check if vocals are actually usable
-          if (result.vocals.length < 10000) {
-            console.warn("   ⚠️ [DEMUCS] Vocals file is suspiciously small - may be empty");
-            return null; // Treat as failed
-          }
-        } else {
-          console.warn("   ⚠️ [DEMUCS] No vocals returned from separation");
-        }
-        return result;
-      })()
-    ]);
+      // Additional validation: check if vocals are actually usable
+      if (vocalsResult.vocals.length >= 10000) {
+        vocalsBuffer = vocalsResult.vocals;
+        console.log("   → [DEMUCS] Vocals buffer validated - will use for transcription");
+      } else {
+        console.warn("   ⚠️ [DEMUCS] Vocals file is suspiciously small - may be empty, will use original audio");
+      }
+    } else {
+      console.warn("   ⚠️ [DEMUCS] No vocals returned from separation - will use original audio");
+    }
     
-    const parallelTime = ((Date.now() - parallelStart) / 1000).toFixed(1);
-    console.log(`⚡ [PARALLEL PROCESSING] Both completed in ${parallelTime}s\n`);
+    // STEP 3: Transcribe vocals if available, otherwise original audio
+    console.log("\n🎤 [WHISPER] Starting Whisper transcription...");
+    const audioToTranscribe = vocalsBuffer || wavBuffer;
+    const audioSource = vocalsBuffer ? 'isolated vocals' : 'original audio';
+    console.log(`   → [WHISPER] Transcribing from: ${audioSource}`);
+    
+    const whisperStart = Date.now();
+    const transcription = await openai.audio.transcriptions.create({
+      file: new File([audioToTranscribe], "audio.wav", { type: "audio/wav" }),
+      model: "whisper-1",
+      response_format: "verbose_json",
+    });
+    const whisperTime = ((Date.now() - whisperStart) / 1000).toFixed(1);
+    console.log(`✅ [WHISPER] Transcription complete in ${whisperTime}s (from ${audioSource})`);
 
     const segments = transcription.segments || [];
     const fullText = transcription.text || "";
 
     console.log('🎤 Whisper: Total segments:', segments.length);
     
-    // Check if transcription is mostly instrumental symbols (♪♪) - indicates vocals separation failed
+    // Check if transcription is mostly instrumental symbols (♪♪) - indicates transcription failed
     const transcriptionIsInstrumental = isMostlyInstrumental(segments);
     
     if (transcriptionIsInstrumental) {
@@ -740,39 +733,39 @@ router.post("/", async (req, res) => {
     console.log(`🎤 Split ${rawSegments.length} segments into ${verseSegments.length} individual verses`);
     rawSegments = verseSegments; // Use the split verses
 
-    // STEP 3 — Extract pitch from vocals (fast, ~2-5s)
+    // STEP 4 — Extract pitch from vocals (fast, ~2-5s)
     // Use original audio as fallback if vocals separation failed or transcription is mostly instrumental
     let notes = null;
-    let vocalsBuffer = vocalsResult?.vocals || null;
+    let pitchAudioBuffer = vocalsBuffer || null; // Use vocals from Demucs if available
     let pitchExtractionSucceeded = false;
     let usingOriginalAudio = false;
     
     console.log(`\n🎵 [PITCH EXTRACTION] Starting pitch extraction...`);
     
-    // Check if we should use original audio instead of vocals
-    if (transcriptionIsInstrumental || !vocalsBuffer || vocalsBuffer.length < 10000) {
+    // Check if we should use original audio instead of vocals for pitch extraction
+    if (transcriptionIsInstrumental || !pitchAudioBuffer || pitchAudioBuffer.length < 10000) {
       if (transcriptionIsInstrumental) {
         console.warn('   ⚠️ [PITCH] Transcription is mostly instrumental symbols - vocals separation likely failed');
-      } else if (!vocalsBuffer) {
+      } else if (!pitchAudioBuffer) {
         console.warn('   ⚠️ [PITCH] No vocals buffer available');
       } else {
         console.warn('   ⚠️ [PITCH] Vocals buffer too small - likely empty or corrupted');
       }
       console.log('   → [PITCH] Falling back to original audio for pitch extraction');
-      vocalsBuffer = wavBuffer; // Use original audio
+      pitchAudioBuffer = wavBuffer; // Use original audio
       usingOriginalAudio = true;
     }
     
-    console.log(`   → [PITCH] Audio buffer available: ${vocalsBuffer ? 'YES' : 'NO'}`);
+    console.log(`   → [PITCH] Audio buffer available: ${pitchAudioBuffer ? 'YES' : 'NO'}`);
     console.log(`   → [PITCH] Using: ${usingOriginalAudio ? 'ORIGINAL AUDIO (fallback)' : 'ISOLATED VOCALS'}`);
     
-    if (vocalsBuffer) {
-      console.log(`   → [PITCH] Audio buffer size: ${(vocalsBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+    if (pitchAudioBuffer) {
+      console.log(`   → [PITCH] Audio buffer size: ${(pitchAudioBuffer.length / 1024 / 1024).toFixed(2)}MB`);
       
       try {
         const pitchStart = Date.now();
         // Add timeout to prevent hanging (60 seconds max)
-        const pitchExtractionPromise = extractPitch(vocalsBuffer);
+        const pitchExtractionPromise = extractPitch(pitchAudioBuffer);
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Pitch extraction timeout (60s)')), 60000)
         );
@@ -850,11 +843,12 @@ router.post("/", async (req, res) => {
       cached: false,
       segments: rawSegments, // Return raw Whisper segments
       lyrics: fullText,
-      notes: notes, // Notes extracted from isolated vocals
+      notes: notes, // Notes extracted from isolated vocals or original audio
       title: title || null,
       artist: artist || null,
       thumbnail: thumbnailStoragePath || null,
       firstVerseStartTime: firstVerseStartTime, // First verse start time
+      usingOriginalAudio: usingOriginalAudio || false, // Flag to indicate if we used original audio fallback
     });
   } catch (error) {
     console.error("Whisper error:", error);

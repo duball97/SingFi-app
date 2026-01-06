@@ -8,22 +8,31 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [isArtistSearch, setIsArtistSearch] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [suggestedSongs, setSuggestedSongs] = useState([]);
   const [loadingSuggested, setLoadingSuggested] = useState(true);
   const navigate = useNavigate();
 
-  const handleSearch = async (query) => {
+  const handleSearch = async (query, page = 1) => {
     if (!query.trim()) {
       setSearchResults([]);
       setIsArtistSearch(false);
+      setHasMore(false);
+      setCurrentPage(1);
       return;
     }
 
-    setSearching(true);
+    if (page === 1) {
+      setSearching(true);
+    } else {
+      setLoadingMore(true);
+    }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&page=${page}`);
       
       // Check if response is JSON
       const contentType = response.headers.get('content-type');
@@ -39,13 +48,29 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setSearchResults(data.videos || []);
+      
+      if (page === 1) {
+        setSearchResults(data.videos || []);
+      } else {
+        // Append new results for pagination
+        setSearchResults(prev => [...prev, ...(data.videos || [])]);
+      }
+      
       setIsArtistSearch(data.isArtistSearch || false);
+      setHasMore(data.hasMore || false);
+      setCurrentPage(page);
     } catch (err) {
       console.error('Search error:', err);
       alert(err.message || 'Failed to search. Please make sure the backend server is running.');
     } finally {
       setSearching(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore && searchQuery.trim()) {
+      handleSearch(searchQuery, currentPage + 1);
     }
   };
 
@@ -113,13 +138,13 @@ export default function Home() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={(e) => {
                 if (e.key === 'Enter') {
-                  handleSearch(searchQuery);
+                  handleSearch(searchQuery, 1);
                 }
               }}
               className="search-input"
             />
             <button
-              onClick={() => handleSearch(searchQuery)}
+              onClick={() => handleSearch(searchQuery, 1)}
               disabled={searching || !searchQuery.trim()}
               className="search-button"
             >
@@ -158,6 +183,17 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              {isArtistSearch && hasMore && (
+                <div className="load-more-container">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="load-more-button"
+                  >
+                    {loadingMore ? 'Loading...' : 'Load More Songs'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

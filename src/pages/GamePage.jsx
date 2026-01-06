@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import Game from '../components/Game';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -89,9 +90,14 @@ export default function GamePage() {
         });
         
         if (!hasValidSegments && segments.length > 0) {
-          // Segments are mostly instrumental - this shouldn't happen if backend is working correctly
-          // but if it does, throw error to keep loading state
-          throw new Error('Song transcription is invalid. Please try again.');
+          // Segments are mostly instrumental - redirect to error page
+          navigate('/song-error', {
+            state: {
+              title: data.title || title,
+              artist: data.artist || artist,
+            }
+          });
+          return;
         }
         
         setSegments(segments);
@@ -173,6 +179,8 @@ export default function GamePage() {
     );
   }
 
+  const { user } = useAuth();
+
   return (
     <Game
       videoId={videoId}
@@ -180,6 +188,7 @@ export default function GamePage() {
       lyrics={lyrics}
       notes={notes}
       firstVerseStartTime={firstVerseStartTime}
+      user={user}
       onBack={handleBack}
     />
   );

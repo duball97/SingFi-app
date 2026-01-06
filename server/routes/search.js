@@ -5,11 +5,14 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, page = '1' } = req.query;
 
     if (!q) {
       return res.status(400).json({ error: 'Search query (q) is required' });
     }
+
+    const pageNum = parseInt(page, 10) || 1;
+    const resultsPerPage = 9;
 
     // Create Innertube instance
     const yt = await Innertube.create();
@@ -83,17 +86,32 @@ router.get('/', async (req, res) => {
     const isLikelyArtistOnly = (sameChannelRatio >= 0.5 && allVideos.length >= 2) || 
                                (!hasSongIndicators && !hasArtistIndicators && wordCount <= 4 && !q.includes('"') && !q.includes("'"));
     
-    console.log(`[SEARCH] Query: "${q}"`);
+    console.log(`[SEARCH] Query: "${q}", Page: ${pageNum}`);
     console.log(`[SEARCH] Word count: ${wordCount}, Has song indicators: ${hasSongIndicators}, Has artist indicators: ${hasArtistIndicators}`);
     console.log(`[SEARCH] Same channel ratio: ${sameChannelRatio.toFixed(2)}, Max channel count: ${maxChannelCount}, Total videos: ${allVideos.length}`);
     console.log(`[SEARCH] Is artist search: ${isLikelyArtistOnly}`);
-    console.log(`[SEARCH] Will return ${isLikelyArtistOnly ? 8 : 1} videos`);
     
-    const videos = allVideos.slice(0, isLikelyArtistOnly ? 8 : 1); // Return 8 for artist-only, 1 for specific song
+    // For artist searches, use pagination (9 per page)
+    // For specific song searches, return 1 result (no pagination)
+    let videos, hasMore;
+    if (isLikelyArtistOnly) {
+      const startIndex = (pageNum - 1) * resultsPerPage;
+      const endIndex = startIndex + resultsPerPage;
+      videos = allVideos.slice(startIndex, endIndex);
+      hasMore = endIndex < allVideos.length;
+      console.log(`[SEARCH] Returning ${videos.length} videos (page ${pageNum}), hasMore: ${hasMore}`);
+    } else {
+      videos = allVideos.slice(0, 1); // Return 1 for specific song
+      hasMore = false;
+      console.log(`[SEARCH] Returning 1 video (specific song)`);
+    }
 
     res.json({ 
       videos,
-      isArtistSearch: isLikelyArtistOnly 
+      isArtistSearch: isLikelyArtistOnly,
+      hasMore: hasMore,
+      page: pageNum,
+      totalResults: allVideos.length
     });
   } catch (error) {
     console.error('Search error:', error);

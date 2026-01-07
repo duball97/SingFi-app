@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 
 // Pitch tolerance for "on target" - higher value = easier to hit notes
-const PITCH_TOLERANCE = 150; // Hz tolerance (increased from 80 for easier gameplay)
+const PITCH_TOLERANCE = 300; // Hz tolerance (increased significantly for easier gameplay)
 
 export default function PitchBars({ segments, currentTime, userPitch, notes, firstVerseStartTime }) {
   const WINDOW_DURATION = 5; // Show 5 seconds of notes at a time
@@ -167,15 +167,29 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
       
       pitchBars.forEach(bar => {
         if (currentTime >= bar.start && currentTime <= bar.end) {
-          // Check if user is on target
-          const pitchDiff = Math.abs(userPitch - bar.targetPitch);
-          const isOnTarget = pitchDiff <= PITCH_TOLERANCE;
+          // Check if user is on target (with octave tolerance)
+          // Allow matching within tolerance or in any octave (2x, 0.5x, etc.)
+          let pitchDiff = Math.abs(userPitch - bar.targetPitch);
+          let isOnTarget = pitchDiff <= PITCH_TOLERANCE;
+          
+          // Also check octave variations (singing an octave higher/lower)
+          if (!isOnTarget && bar.targetPitch > 0) {
+            const octaveUp = bar.targetPitch * 2;
+            const octaveDown = bar.targetPitch / 2;
+            const diffUp = Math.abs(userPitch - octaveUp);
+            const diffDown = Math.abs(userPitch - octaveDown);
+            isOnTarget = diffUp <= PITCH_TOLERANCE || diffDown <= PITCH_TOLERANCE;
+            if (isOnTarget) {
+              pitchDiff = Math.min(diffUp, diffDown);
+            }
+          }
           
           if (!barFillsRef.current[bar.id]) {
             barFillsRef.current[bar.id] = { 
               filledSegments: [],
               lastCheckedTime: bar.start,
-              wasOnTarget: false
+              wasOnTarget: false,
+              wasClose: false
             };
           }
           
@@ -183,17 +197,24 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
           const timeSinceLastCheck = currentTime - fillState.lastCheckedTime;
           
           // Always update fills when on target for real-time smooth fills
-          if (isOnTarget) {
-            // Always update fill when on target for smooth, responsive fills
+          // Also allow partial fills when close (within 1.5x tolerance)
+          const extendedTolerance = PITCH_TOLERANCE * 1.5;
+          const isCloseEnough = pitchDiff <= extendedTolerance;
+          
+          if (isOnTarget || isCloseEnough) {
+            // Calculate fill amount based on how close we are
+            const fillAmount = isOnTarget ? 1.0 : Math.max(0.3, 1 - (pitchDiff - PITCH_TOLERANCE) / (extendedTolerance - PITCH_TOLERANCE));
+            
+            // Always update fill when on target or close for smooth, responsive fills
             const lastSegment = fillState.filledSegments[fillState.filledSegments.length - 1];
-            const gapTolerance = 0.05; // 50ms gap tolerance
+            const gapTolerance = 0.1; // Increased gap tolerance to 100ms for smoother fills
             
             if (lastSegment && lastSegment.end >= fillState.lastCheckedTime - gapTolerance) {
               // Extend existing segment to current time - this creates smooth continuous fills
               lastSegment.end = currentTime;
             } else {
               // Start new segment - use lastCheckedTime as start to avoid gaps
-              const segmentStart = fillState.wasOnTarget 
+              const segmentStart = fillState.wasOnTarget || fillState.wasClose
                 ? fillState.lastCheckedTime 
                 : Math.max(bar.start, fillState.lastCheckedTime);
               fillState.filledSegments.push({
@@ -202,11 +223,13 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
               });
             }
             needsUpdate = true;
-            fillState.wasOnTarget = true;
+            fillState.wasOnTarget = isOnTarget;
+            fillState.wasClose = isCloseEnough;
             fillState.lastCheckedTime = currentTime;
           } else {
-            // Not on target - update lastCheckedTime to track progress
+            // Not on target or close - update lastCheckedTime to track progress
             fillState.wasOnTarget = false;
+            fillState.wasClose = false;
             fillState.lastCheckedTime = currentTime;
           }
         }
@@ -274,11 +297,20 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
           const fillState = barFillsRef.current[bar.id];
           const filledSegments = fillState?.filledSegments || [];
           
-          // Check if currently on target (for real-time indicator)
+          // Check if currently on target (for real-time indicator) with octave tolerance
           let isCurrentlyOnTarget = false;
           if (isActive && userPitch) {
-            const pitchDiff = Math.abs(userPitch - bar.targetPitch);
+            let pitchDiff = Math.abs(userPitch - bar.targetPitch);
             isCurrentlyOnTarget = pitchDiff <= PITCH_TOLERANCE;
+            
+            // Also check octave variations
+            if (!isCurrentlyOnTarget && bar.targetPitch > 0) {
+              const octaveUp = bar.targetPitch * 2;
+              const octaveDown = bar.targetPitch / 2;
+              isCurrentlyOnTarget = 
+                Math.abs(userPitch - octaveUp) <= PITCH_TOLERANCE ||
+                Math.abs(userPitch - octaveDown) <= PITCH_TOLERANCE;
+            }
           }
 
           return (

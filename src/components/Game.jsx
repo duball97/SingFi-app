@@ -254,7 +254,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         sumSquares += data[i] * data[i];
       }
       const rms = Math.sqrt(sumSquares / data.length);
-      const volumeThreshold = 0.01; // Minimum volume threshold to filter out background PC audio
+      const volumeThreshold = 0.005; // Lowered threshold to be more forgiving (was 0.01)
       
       // Only process pitch if volume is above threshold (user is actually singing)
       if (rms < volumeThreshold) {
@@ -263,23 +263,66 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         return;
       }
 
+      // Improved autocorrelation with better pitch detection
       let maxCorrelation = 0;
       let maxPeriod = 0;
-
-      for (let period = 20; period < bufferLength / 2; period++) {
+      
+      // Calculate valid period range for human voice (80Hz to 2000Hz)
+      const minPeriod = Math.max(20, Math.floor(sampleRate / 2000)); // Max 2000Hz
+      const maxPeriodLimit = Math.min(Math.floor(bufferLength / 2), Math.floor(sampleRate / 80)); // Min 80Hz
+      
+      // Use step size for faster computation while maintaining accuracy
+      const step = Math.max(1, Math.floor((maxPeriodLimit - minPeriod) / 200));
+      
+      for (let period = minPeriod; period < maxPeriodLimit; period += step) {
         let correlation = 0;
-        for (let i = 0; i < bufferLength - period; i++) {
+        const checkLength = Math.min(bufferLength - period, 4096); // Larger window for better accuracy
+        
+        for (let i = 0; i < checkLength; i++) {
           correlation += Math.abs(data[i] * data[i + period]);
         }
+        
+        // Normalize by length for fair comparison
+        correlation /= checkLength;
+        
         if (correlation > maxCorrelation) {
           maxCorrelation = correlation;
           maxPeriod = period;
         }
       }
-
+      
+      // Refine around the peak for better accuracy
       if (maxPeriod > 0) {
-        const frequency = sampleRate / maxPeriod;
-        if (frequency > 80 && frequency < 2000) {
+        const refineRange = 5;
+        const startPeriod = Math.max(minPeriod, maxPeriod - refineRange);
+        const endPeriod = Math.min(maxPeriodLimit, maxPeriod + refineRange);
+        
+        for (let period = startPeriod; period < endPeriod; period++) {
+          let correlation = 0;
+          const checkLength = Math.min(bufferLength - period, 4096);
+          for (let i = 0; i < checkLength; i++) {
+            correlation += Math.abs(data[i] * data[i + period]);
+          }
+          correlation /= checkLength;
+          if (correlation > maxCorrelation) {
+            maxCorrelation = correlation;
+            maxPeriod = period;
+          }
+        }
+      }
+
+      if (maxPeriod > 0 && maxCorrelation > 0.1) { // Minimum correlation threshold
+        const rawFrequency = sampleRate / maxPeriod;
+        if (rawFrequency > 80 && rawFrequency < 2000) {
+          // Smooth pitch detection with previous value to reduce jitter
+          const previousPitch = userPitch;
+          let frequency;
+          if (previousPitch && Math.abs(rawFrequency - previousPitch) < 100) {
+            // Smooth if change is reasonable (within 100Hz)
+            frequency = previousPitch * 0.7 + rawFrequency * 0.3;
+          } else {
+            frequency = rawFrequency;
+          }
           setUserPitch(frequency);
           
           // Only award score if user is on target for an active note
@@ -291,15 +334,30 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
             );
             
             if (activeNote) {
-              // Calculate accuracy based on pitch difference
-              const pitchDiff = Math.abs(frequency - activeNote.targetPitch);
-              const tolerance = 150; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
+              // Calculate accuracy based on pitch difference with octave tolerance
+              const tolerance = 300; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
+              
+              // Check base pitch and octave variations
+              let pitchDiff = Math.abs(frequency - activeNote.targetPitch);
+              let isOnTarget = pitchDiff <= tolerance;
+              
+              // Also check octave variations (singing an octave higher/lower)
+              if (!isOnTarget && activeNote.targetPitch > 0) {
+                const octaveUp = activeNote.targetPitch * 2;
+                const octaveDown = activeNote.targetPitch / 2;
+                const diffUp = Math.abs(frequency - octaveUp);
+                const diffDown = Math.abs(frequency - octaveDown);
+                if (diffUp <= tolerance || diffDown <= tolerance) {
+                  isOnTarget = true;
+                  pitchDiff = Math.min(diffUp, diffDown, pitchDiff);
+                }
+              }
               
               // Award proportional points even when partially on target
               // Points scale from 0 (far off) to full (perfect match)
               // This ensures partial bar fills give proportional scores
               let accuracy = 0;
-              if (pitchDiff <= tolerance) {
+              if (isOnTarget) {
                 // Within tolerance: 1.0 when perfect, decreasing to 0.0 at edge
                 accuracy = 1 - (pitchDiff / tolerance);
               } else {
@@ -307,7 +365,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                 // Gradually decrease points up to 2x tolerance
                 const extendedTolerance = tolerance * 2;
                 if (pitchDiff <= extendedTolerance) {
-                  accuracy = 0.3 * (1 - (pitchDiff - tolerance) / tolerance); // 30% max when just outside tolerance
+                  accuracy = 0.5 * (1 - (pitchDiff - tolerance) / tolerance); // 50% max when just outside tolerance (increased from 30%)
                 }
               }
               

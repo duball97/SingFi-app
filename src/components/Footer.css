@@ -1,9 +1,8 @@
 .site-footer {
-  background: rgba(10, 10, 10, 0.95);
+  background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 107, 53, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin-top: auto;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .footer-container {
@@ -32,14 +31,11 @@
 }
 
 .footer-logo-text {
-  font-size: 1.5rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffd700 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-transform: uppercase;
-  letter-spacing: -1px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: none;
+  letter-spacing: -0.5px;
 }
 
 .footer-info {
@@ -50,15 +46,16 @@
 }
 
 .footer-tagline {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.9rem;
-  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  font-weight: 400;
   margin: 0;
 }
 
 .footer-copyright {
   color: rgba(255, 255, 255, 0.5);
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 400;
   margin: 0;
 }
 

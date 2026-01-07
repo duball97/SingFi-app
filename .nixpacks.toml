@@ -3,8 +3,8 @@ nixPkgs = ["nodejs_20", "python3", "ffmpeg"]
 
 [phases.install]
 cmds = [
-  "python3 -m pip install yt-dlp",
-  "npm install"
+  "python3 -m pip install --no-cache-dir yt-dlp",
+  "npm ci --prefer-offline --no-audit"
 ]
 
 [phases.build]
@@ -15,4 +15,5 @@ cmd = "NODE_ENV=production npm start"
 
 [variables]
 NODE_ENV = "production"
+NIXPACKS_NODE_VERSION = "20"
 

@@ -174,7 +174,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       sessionSavedRef.current = true;
       
       // Flush any remaining accumulated score
-      const finalScore = score + scoreAccumulatorRef.current;
+      const finalScore = Math.min(score + scoreAccumulatorRef.current, 100000); // Cap at 100k
       if (scoreAccumulatorRef.current > 0) {
         setScore(finalScore);
         scoreAccumulatorRef.current = 0;
@@ -201,6 +201,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
             notesHit: notesHitRef.current,
             notesTotal: notesTotalRef.current,
             durationSeconds: durationSeconds,
+            gameMode: 'solo', // Default to solo, can be changed later for online/duet modes
           }),
         }).catch(err => {
           console.error('Error saving game session:', err);
@@ -214,7 +215,11 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
     if (gameState === 'playing' && isMicActive) {
       const flushInterval = setInterval(() => {
         if (scoreAccumulatorRef.current > 0) {
-          setScore(prev => prev + scoreAccumulatorRef.current);
+          setScore(prev => {
+            const newScore = prev + scoreAccumulatorRef.current;
+            // Cap score at 100k
+            return Math.min(newScore, 100000);
+          });
           scoreAccumulatorRef.current = 0;
           lastScoreUpdateRef.current = Date.now();
         }
@@ -290,14 +295,31 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
               const pitchDiff = Math.abs(frequency - activeNote.targetPitch);
               const tolerance = 150; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
               
+              // Award proportional points even when partially on target
+              // Points scale from 0 (far off) to full (perfect match)
+              // This ensures partial bar fills give proportional scores
+              let accuracy = 0;
               if (pitchDiff <= tolerance) {
-                // Award score based on accuracy and time (accounts for partial fills)
-                // More accurate = more points, scaled by time elapsed
-                const accuracy = 1 - (pitchDiff / tolerance); // 1.0 when perfect, 0.0 at edge of tolerance
-                // Award points per second when on target
+                // Within tolerance: 1.0 when perfect, decreasing to 0.0 at edge
+                accuracy = 1 - (pitchDiff / tolerance);
+              } else {
+                // Outside tolerance but still award some points for being close
+                // Gradually decrease points up to 2x tolerance
+                const extendedTolerance = tolerance * 2;
+                if (pitchDiff <= extendedTolerance) {
+                  accuracy = 0.3 * (1 - (pitchDiff - tolerance) / tolerance); // 30% max when just outside tolerance
+                }
+              }
+              
+              if (accuracy > 0) {
+                // Award points per second, scaled by accuracy
+                // Max 100k total score, so calculate points based on song duration and note density
                 // Using requestAnimationFrame timing (~16-17ms per frame at 60fps)
                 const timeWeight = 0.016; // ~16ms per frame
-                const points = 50 * accuracy * timeWeight; // 50 points/sec when perfect, scaled by accuracy (increased for visibility)
+                // Base rate: points per second when perfect
+                // Adjusted to ensure max score of ~100k for a typical song
+                const basePointsPerSecond = 100; // Increased for better visibility
+                const points = basePointsPerSecond * accuracy * timeWeight;
                 
                 // Accumulate score to ensure partial fills are counted
                 scoreAccumulatorRef.current += points;
@@ -306,13 +328,16 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                 const now = Date.now();
                 if (now - lastScoreUpdateRef.current >= 50) {
                   if (scoreAccumulatorRef.current > 0) {
-                    setScore(prev => prev + scoreAccumulatorRef.current);
+                    setScore(prev => {
+                      const newScore = prev + scoreAccumulatorRef.current;
+                      // Cap score at 100k
+                      return Math.min(newScore, 100000);
+                    });
                     scoreAccumulatorRef.current = 0;
                   }
                   lastScoreUpdateRef.current = now;
                 }
               }
-              // If not on target, no points awarded
             }
             // If no active note, no points awarded
           }

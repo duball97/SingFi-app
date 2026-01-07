@@ -7,10 +7,12 @@
 - **Branch**: `main` (or your default branch)
 
 ### 2. Build Configuration
-- **Build Pack**: `Nixpacks` ✅ (already configured)
+- **Build Pack**: `Dockerfile` (recommended) or `Nixpacks` ✅
 - **Base Directory**: `/` (root)
 - **Port**: `3000` (Coolify will set this via PORT env var)
 - **Is it a static site?**: ❌ **UNCHECKED** (this is a full-stack app)
+
+**Note**: If using Nixpacks, set `NIXPACKS_NODE_VERSION=20` in environment variables to avoid using EOL Node 18.
 
 ### 3. Environment Variables
 
@@ -24,6 +26,11 @@ SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 REPLICATE_API_TOKEN=your_replicate_api_token
 OPENAI_API_KEY=your_openai_api_key
+```
+
+#### Build Optimization Variables (Recommended):
+```
+NIXPACKS_NODE_VERSION=20
 ```
 
 #### Optional (if you need different API URL):
@@ -62,4 +69,9 @@ After deployment:
 - **API not working**: Verify `NODE_ENV=production` is set
 - **Frontend not loading**: Check that `npm run build` completed successfully
 - **Port issues**: Coolify sets PORT automatically, don't override it
+- **Build timeout**: 
+  - The `.dockerignore` file excludes large files (tools/, vocals/, etc.) to speed up builds
+  - Use `Dockerfile` build pack instead of Nixpacks for faster builds
+  - Set `NIXPACKS_NODE_VERSION=20` if using Nixpacks
+  - The optimized `.nixpacks.toml` uses `npm ci` instead of `npm install` for faster installs
 

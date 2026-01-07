@@ -1,11 +1,15 @@
 node_modules
 dist
+dist-ssr
 .env.local
 .env.development
 .env.test
 .git
 .gitignore
 README.md
+DEPLOYMENT.md
+AUTH_SETUP.md
+STORAGE_SETUP.md
 .vscode
 .idea
 *.log
@@ -15,4 +19,11 @@ yarn-error.log*
 .DS_Store
 coverage
 .vocals
+vocals/
+tools/
+*.wav
+*.mp3
+*.zip
+1764669105981-player-script.js
+cursor.txt
 

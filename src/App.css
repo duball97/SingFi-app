@@ -83,8 +83,8 @@
   font-weight: 700;
   margin-bottom: 2rem;
   color: rgba(255, 255, 255, 0.95);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  text-transform: none;
+  letter-spacing: -0.5px;
 }
 
 .search-container {
@@ -97,33 +97,31 @@
 
 .search-input {
   flex: 1;
-  padding: 1rem 1.5rem;
-  font-size: 1.1rem;
-  border: 2px solid rgba(255, 107, 53, 0.3);
-  border-radius: 16px;
-  background: rgba(20, 20, 20, 0.8);
-  backdrop-filter: blur(10px);
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: 500px;
+  background: rgba(255, 255, 255, 0.1);
   color: white;
-  transition: all 0.3s;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  font-weight: 400;
 }
 
 .search-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #ff6b35;
-  box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.2), 0 4px 20px rgba(0, 0, 0, 0.4);
-  background: rgba(25, 25, 25, 0.9);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.5);
 }
 
 .search-button {
-  padding: 1rem 2.5rem;
-  font-size: 1.1rem;
+  padding: 12px 32px;
+  font-size: 0.875rem;
   font-weight: 700;
-  border-radius: 16px;
+  border-radius: 500px;
   min-width: 140px;
 }
 
@@ -138,8 +136,8 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.95);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  text-transform: none;
+  letter-spacing: -0.5px;
 }
 
 .results-list {
@@ -151,48 +149,27 @@
 .result-item {
   display: flex;
   gap: 1rem;
-  padding: 1.25rem;
-  background: linear-gradient(135deg, rgba(30, 30, 30, 0.9) 0%, rgba(20, 20, 20, 0.9) 100%);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 107, 53, 0.2);
-  border-radius: 20px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
 }
 
-.result-item::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #ff6b35 0%, #f7931e 100%);
-  transform: scaleX(0);
-  transition: transform 0.3s;
-}
-
 .result-item:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255, 107, 53, 0.5);
-  box-shadow: 0 8px 30px rgba(255, 107, 53, 0.3);
-  background: linear-gradient(135deg, rgba(40, 30, 25, 0.95) 0%, rgba(30, 20, 15, 0.95) 100%);
-}
-
-.result-item:hover::before {
-  transform: scaleX(1);
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 .result-thumbnail {
   width: 140px;
   height: 105px;
   object-fit: cover;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 107, 53, 0.3);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  border: none;
 }
 
 .result-info {
@@ -204,20 +181,20 @@
 }
 
 .result-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 500;
   color: rgba(255, 255, 255, 0.95);
   line-height: 1.4;
 }
 
 .result-channel {
-  font-size: 0.9rem;
-  color: rgba(255, 107, 53, 0.8);
-  font-weight: 500;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
 }
 
 .result-duration {
-  font-size: 0.85rem;
+  font-size: 0.8125rem;
   color: rgba(255, 255, 255, 0.5);
   font-weight: 400;
 }
@@ -234,11 +211,11 @@
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 2rem;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.95);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  text-transform: none;
+  letter-spacing: -0.5px;
 }
 
 .title-icon {
@@ -271,22 +248,18 @@
 }
 
 .suggested-item {
-  background: linear-gradient(135deg, rgba(30, 30, 30, 0.9) 0%, rgba(20, 20, 20, 0.9) 100%);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 107, 53, 0.2);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
   position: relative;
 }
 
 .suggested-item:hover {
-  transform: translateY(-6px) scale(1.02);
-  border-color: rgba(255, 107, 53, 0.5);
-  box-shadow: 0 12px 40px rgba(255, 107, 53, 0.3);
-  background: linear-gradient(135deg, rgba(40, 30, 25, 0.95) 0%, rgba(30, 20, 15, 0.95) 100%);
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-4px);
 }
 
 .suggested-thumbnail-wrapper {
@@ -347,8 +320,8 @@
 }
 
 .suggested-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 500;
   color: rgba(255, 255, 255, 0.95);
   line-height: 1.4;
   display: -webkit-box;
@@ -359,9 +332,9 @@
 }
 
 .suggested-artist {
-  font-size: 0.9rem;
-  color: rgba(255, 107, 53, 0.8);
-  font-weight: 500;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   line-clamp: 1;
@@ -391,29 +364,28 @@
 .selected-song {
   margin-top: 2rem;
   padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(247, 147, 30, 0.1) 100%);
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 107, 53, 0.3);
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 8px;
   max-width: 700px;
   margin-left: auto;
   margin-right: auto;
-  box-shadow: 0 4px 20px rgba(255, 107, 53, 0.2);
 }
 
 .selected-song h3 {
   margin: 0 0 0.5rem 0;
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #ff6b35;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .selected-song p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  font-weight: 400;
 }
 
 .loading,
@@ -422,22 +394,20 @@
   padding: 1.5rem 2rem;
   margin: 2rem auto;
   max-width: 600px;
-  border-radius: 16px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-weight: 500;
 }
 
 .loading {
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(247, 147, 30, 0.1) 100%);
-  border: 2px solid rgba(255, 107, 53, 0.3);
-  color: #ff6b35;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .error {
-  background: linear-gradient(135deg, rgba(255, 68, 68, 0.2) 0%, rgba(200, 0, 0, 0.2) 100%);
-  border: 2px solid rgba(255, 68, 68, 0.5);
-  color: #ff6b35;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .player-section {
@@ -447,12 +417,10 @@
 .player-container {
   max-width: 800px;
   margin: 0 auto;
-  background: linear-gradient(135deg, rgba(20, 20, 20, 0.9) 0%, rgba(15, 15, 15, 0.9) 100%);
-  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
   padding: 2rem;
-  border: 2px solid rgba(255, 107, 53, 0.2);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
+  border: none;
 }
 
 .game-section {
@@ -468,14 +436,10 @@
 
 .lyrics-container {
   padding: 2.5rem;
-  background: linear-gradient(135deg, rgba(15, 15, 15, 0.95) 0%, rgba(10, 10, 10, 0.95) 100%);
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 107, 53, 0.2);
-  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 8px;
   min-height: 400px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 107, 53, 0.1);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -540,22 +504,20 @@
 
 .pitch-detector {
   padding: 2rem;
-  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(15, 15, 15, 0.95) 100%);
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 107, 53, 0.2);
-  border-radius: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-radius: 8px;
 }
 
 .pitch-detector button {
   width: 100%;
-  padding: 1.25rem;
-  font-size: 1.2rem;
+  padding: 14px 32px;
+  font-size: 0.875rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
-  border-radius: 16px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  border-radius: 500px;
+  text-transform: none;
+  letter-spacing: 0.5px;
 }
 
 .pitch-detector button.listening {

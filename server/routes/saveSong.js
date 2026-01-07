@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post('/', async (req, res) => {
   try {
-    const { youtubeId, title, artist, lyrics, segments } = req.body;
+    const { youtubeId, title, artist, lyrics, segments, genre } = req.body;
 
     if (!youtubeId || !segments) {
       return res.status(400).json({ error: 'youtubeId and segments are required' });
@@ -19,6 +19,7 @@ router.post('/', async (req, res) => {
         artist: artist || null,
         lyrics: lyrics || null,
         segments: segments,
+        genre: genre || null,
       }, {
         onConflict: 'youtube_id',
       })

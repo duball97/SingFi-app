@@ -152,7 +152,64 @@ function isMostlyInstrumental(segments) {
   return instrumentalRatio > 0.7;
 }
 
-// Detect first verse start time using GPT-4.1-nano
+// Detect music genre using GPT-4o-mini
+async function detectGenre(segments, title, artist, lyrics) {
+  try {
+    if (!segments || segments.length === 0) {
+      return null;
+    }
+
+    // Build context from lyrics and first segments
+    const previewText = lyrics ? lyrics.substring(0, 1000) : segments.slice(0, 15).map(s => s.text || '').join(' ');
+
+    const openai = getOpenAI();
+    
+    const messages = [
+      {
+        role: "system",
+        content: "You are a music genre classification expert. Analyze the song and return ONLY one of these genres: Rock, Hip Hop, Pop, Country, R&B, Electronic, Jazz, Classical, Latin, Metal, Folk, Reggae, Blues, Punk, Indie, Other. Return just the genre name, nothing else."
+      },
+      {
+        role: "user",
+        content: `Analyze this song to determine its genre:
+
+Title: "${title || 'Unknown'}"
+Artist: "${artist || 'Unknown'}"
+
+Lyrics preview:
+${previewText}
+
+Based on the lyrics, style, and content, classify this song into one of these genres:
+Rock, Hip Hop, Pop, Country, R&B, Electronic, Jazz, Classical, Latin, Metal, Folk, Reggae, Blues, Punk, Indie, Other
+
+Return ONLY the genre name (e.g., "Rock" or "Hip Hop").`
+      }
+    ];
+
+    console.log('🤖 [GENRE] Detecting genre...');
+    const response = await openai.chat.completions.create({
+      model: "gpt-4.1-nano",
+      messages,
+      max_tokens: 20,
+      temperature: 0.3, // Lower temperature for more consistent classification
+    });
+
+    const result = response.choices[0]?.message?.content?.trim();
+    
+    // Validate genre is one of the allowed values
+    const validGenres = ['Rock', 'Hip Hop', 'Pop', 'Country', 'R&B', 'Electronic', 'Jazz', 'Classical', 'Latin', 'Metal', 'Folk', 'Reggae', 'Blues', 'Punk', 'Indie', 'Other'];
+    const detectedGenre = validGenres.find(g => result.toLowerCase().includes(g.toLowerCase())) || 'Other';
+    
+    console.log(`✅ [GENRE] Detected genre: ${detectedGenre}`);
+    return detectedGenre;
+  } catch (error) {
+    console.error('❌ [GENRE] Error detecting genre:', error.message);
+    // Fallback: return "Other"
+    return 'Other';
+  }
+}
+
+// Detect first verse start time using GPT-4o-mini
 async function detectFirstVerse(segments, title, artist) {
   try {
     if (!segments || segments.length === 0) {
@@ -366,6 +423,7 @@ router.post("/", async (req, res) => {
           artist: cached.artist || null,
           thumbnail: cached.thumbnail || null,
           firstVerseStartTime: cached.first_verse_start_time,
+          genre: cached.genre || null,
         });
       } else {
         console.log('⚠️ Cache exists but missing first_verse_start_time, detecting first verse from cached segments...');
@@ -396,6 +454,7 @@ router.post("/", async (req, res) => {
             artist: cached.artist || null,
             thumbnail: cached.thumbnail || null,
             firstVerseStartTime: firstVerseStartTime,
+            genre: cached.genre || null,
           });
         } catch (error) {
           console.error('❌ [FIRST VERSE] Error detecting first verse from cache:', error.message);
@@ -447,6 +506,7 @@ router.post("/", async (req, res) => {
                 title: cached.title,
                 artist: cached.artist,
                 thumbnail: cached.thumbnail || null,
+                genre: cached.genre || null,
               });
             } else {
               console.warn('   ⚠️ [RETRY PITCH] No pitch data extracted, returning cached without notes');
@@ -470,6 +530,7 @@ router.post("/", async (req, res) => {
         title: cached.title,
         artist: cached.artist,
         thumbnail: cached.thumbnail || null,
+        genre: cached.genre || null,
       });
     }
     
@@ -807,6 +868,18 @@ router.post("/", async (req, res) => {
       firstVerseStartTime = rawSegments[0]?.start || 0;
     }
 
+    // STEP 4.6 — Detect genre using GPT
+    console.log('🤖 [GENRE] Detecting music genre...');
+    let genre = null;
+    try {
+      genre = await detectGenre(rawSegments, title, artist, fullText);
+      console.log(`✅ [GENRE] Genre detected: ${genre}`);
+    } catch (error) {
+      console.error('❌ [GENRE] Error detecting genre:', error.message);
+      // Fallback to "Other"
+      genre = 'Other';
+    }
+
     // STEP 5 — Save segments and notes to database
     // Save even if pitch extraction failed - can retry pitch extraction later
     console.log('💾 [SAVE] Saving to database...');
@@ -822,6 +895,7 @@ router.post("/", async (req, res) => {
           notes: notes || null, // Notes extracted from isolated vocals (null if pitch extraction failed)
           thumbnail: thumbnailStoragePath, // Thumbnail path in Storage or YouTube URL
           first_verse_start_time: firstVerseStartTime, // Start time of first verse
+          genre: genre || null, // Music genre detected by AI
           owner: owner || null, // User UUID for RLS (optional for now)
         },
         { onConflict: "youtube_id" }
@@ -848,6 +922,7 @@ router.post("/", async (req, res) => {
       artist: artist || null,
       thumbnail: thumbnailStoragePath || null,
       firstVerseStartTime: firstVerseStartTime, // First verse start time
+      genre: genre || null, // Music genre
       usingOriginalAudio: usingOriginalAudio || false, // Flag to indicate if we used original audio fallback
     });
   } catch (error) {

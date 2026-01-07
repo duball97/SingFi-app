@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
 
     const { data, error } = await supabase
       .from('singfi_songs')
-      .select('youtube_id, title, artist, thumbnail, created_at')
+      .select('youtube_id, title, artist, thumbnail, genre, created_at')
       .order('created_at', { ascending: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
@@ -42,6 +42,7 @@ router.get('/', async (req, res) => {
         title: song.title || 'Unknown Title',
         channel: song.artist || 'Unknown Artist',
         thumbnail: thumbnailUrl,
+        genre: song.genre || null,
       };
     });
 

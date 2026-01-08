@@ -10,6 +10,7 @@ export default function GamePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const videoId = searchParams.get('id');
+  const { user } = useAuth(); // MUST be called before any conditional returns
   
   const [segments, setSegments] = useState([]);
   const [lyrics, setLyrics] = useState('');
@@ -178,8 +179,6 @@ export default function GamePage() {
       </div>
     );
   }
-
-  const { user } = useAuth();
 
   return (
     <Game

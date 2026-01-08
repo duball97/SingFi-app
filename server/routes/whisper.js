@@ -4,6 +4,7 @@ import { promisify } from "util";
 import { tmpdir } from "os";
 import { join, dirname } from "path";
 import fs from "fs";
+import { Readable } from "stream";
 import { supabase } from "../services/supabase.js";
 import OpenAI from "openai";
 import { Innertube } from "youtubei.js";
@@ -635,12 +636,35 @@ router.post("/", async (req, res) => {
     const audioSource = vocalsBuffer ? 'isolated vocals' : 'original audio';
     console.log(`   → [WHISPER] Transcribing from: ${audioSource}`);
     
-    const whisperStart = Date.now();
-    const transcription = await openai.audio.transcriptions.create({
-      file: new File([audioToTranscribe], "audio.wav", { type: "audio/wav" }),
-      model: "whisper-1",
-      response_format: "verbose_json",
+    // Write buffer to temp file for Whisper API (Node.js doesn't have File API)
+    const tempAudioFile = join(tmpdir(), `whisper-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.wav`);
+    await retryFileOperation(async () => {
+      fs.writeFileSync(tempAudioFile, audioToTranscribe);
     });
+    
+    const whisperStart = Date.now();
+    let transcription;
+    try {
+      // Create a File-like object using fs.createReadStream
+      const fileStream = fs.createReadStream(tempAudioFile);
+      
+      transcription = await openai.audio.transcriptions.create({
+        file: fileStream,
+        model: "whisper-1",
+        response_format: "verbose_json",
+      });
+    } finally {
+      // Clean up temp file
+      try {
+        if (fs.existsSync(tempAudioFile)) {
+          await retryFileOperation(async () => {
+            fs.unlinkSync(tempAudioFile);
+          }, 3, 100);
+        }
+      } catch (cleanupErr) {
+        console.warn(`⚠️ Failed to cleanup temp audio file: ${cleanupErr.message}`);
+      }
+    }
     const whisperTime = ((Date.now() - whisperStart) / 1000).toFixed(1);
     console.log(`✅ [WHISPER] Transcription complete in ${whisperTime}s (from ${audioSource})`);
 

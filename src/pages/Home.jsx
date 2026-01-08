@@ -124,14 +124,20 @@ export default function Home() {
   return (
     <div className="app">
       <main className="app-main">
-        <div className="song-selector">
-          <h2>Search for a Song</h2>
-          <p className="hero-subtitle">Find your favorite songs and test your singing skills</p>
-          <p className="hero-description">
-            Search by artist name to discover their popular songs, or search for a specific song title to start singing right away!
-          </p>
-          <div className="search-container">
-            <input
+        <div className="home-layout">
+          {/* Left Column - Hero and Suggested Songs */}
+          <div className="home-left-column">
+            <div className="song-selector">
+              <h2>Master Your Voice</h2>
+              <p className="hero-subtitle">Sing. Score. Dominate.</p>
+              <p className="hero-description">
+                Find any song, challenge yourself, and become a legend.
+              </p>
+            </div>
+            
+            <div className="search-container-wrapper">
+              <div className="search-container">
+              <input
               type="text"
               placeholder="Search by song name, artist, or both..."
               value={searchQuery}
@@ -141,61 +147,19 @@ export default function Home() {
                   handleSearch(searchQuery, 1);
                 }
               }}
-              className="search-input"
-            />
-            <button
-              onClick={() => handleSearch(searchQuery, 1)}
-              disabled={searching || !searchQuery.trim()}
-              className="search-button"
-            >
-              {searching ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-
-          {searchResults.length > 0 && (
-            <div className="search-results">
-              <h3>
-                {isArtistSearch ? `Songs by ${searchQuery}` : 'Search Results'}
-              </h3>
-              <div className={isArtistSearch ? 'results-list artist-results' : 'results-list'}>
-                {searchResults.map((video) => (
-                  <div
-                    key={video.id}
-                    className="result-item"
-                    onClick={() => handleSelectSong(video)}
-                  >
-                    {video.thumbnail && (
-                      <img
-                        src={video.thumbnail}
-                        alt={video.title}
-                        className="result-thumbnail"
-                      />
-                    )}
-                    <div className="result-info">
-                      <div className="result-title">{video.title}</div>
-                      {video.channel && (
-                        <div className="result-channel">{video.channel}</div>
-                      )}
-                      {video.duration && (
-                        <div className="result-duration">{video.duration}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                className="search-input"
+              />
+              <button
+                onClick={() => handleSearch(searchQuery, 1)}
+                disabled={searching || !searchQuery.trim()}
+                className="search-button"
+              >
+                {searching ? 'Searching...' : 'Search'}
+              </button>
               </div>
-              {isArtistSearch && hasMore && (
-                <div className="load-more-container">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="load-more-button"
-                  >
-                    {loadingMore ? 'Loading...' : 'Load More Songs'}
-                  </button>
-                </div>
-              )}
             </div>
-          )}
+
+
 
           {/* Hint text in bottom right - only show for artist searches */}
           {isArtistSearch && searchResults.length > 0 && (
@@ -217,35 +181,41 @@ export default function Home() {
                   <p>Loading songs...</p>
                 </div>
               ) : suggestedSongs.length > 0 ? (
-                <div className="suggested-list">
-                  {suggestedSongs.map((song) => (
-                    <div
-                      key={song.id}
-                      className="suggested-item"
-                      onClick={() => handleSelectSong(song)}
-                    >
-                      {song.thumbnail && (
-                        <div className="suggested-thumbnail-wrapper">
-                          <img
-                            src={song.thumbnail}
-                            alt={song.title}
-                            className="suggested-thumbnail"
-                          />
-                          <div className="play-overlay">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
+                <div className="jukebox-carousel">
+                  <div className="jukebox-track">
+                    {suggestedSongs.map((song, index) => (
+                      <div
+                        key={song.id}
+                        className="jukebox-card"
+                        onClick={() => handleSelectSong(song)}
+                        style={{ '--index': index }}
+                      >
+                        <div className="jukebox-card-inner">
+                          {song.thumbnail && (
+                            <div className="jukebox-image-wrapper">
+                              <img
+                                src={song.thumbnail}
+                                alt={song.title}
+                                className="jukebox-image"
+                              />
+                              <div className="jukebox-play-overlay">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="white">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
+                          <div className="jukebox-card-info">
+                            <div className="jukebox-title">{song.title}</div>
+                            {song.channel && (
+                              <div className="jukebox-artist">{song.channel}</div>
+                            )}
                           </div>
                         </div>
-                      )}
-                      <div className="suggested-info">
-                        <div className="suggested-title">{song.title}</div>
-                        {song.channel && (
-                          <div className="suggested-artist">{song.channel}</div>
-                        )}
+                        <div className="jukebox-card-shadow"></div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="no-suggested-songs">
@@ -254,6 +224,76 @@ export default function Home() {
               )}
             </div>
           )}
+          </div>
+
+          {/* Right Column - Search Results */}
+          <div className="home-right-column">
+            {searchResults.length > 0 ? (
+              <div className="search-results">
+                <h3>
+                  {isArtistSearch ? `Songs by ${searchQuery}` : 'Search Results'}
+                </h3>
+                <div className="jukebox-carousel">
+                  <div className="jukebox-track">
+                    {searchResults.map((video, index) => (
+                      <div
+                        key={video.id}
+                        className="jukebox-card"
+                        onClick={() => handleSelectSong(video)}
+                        style={{ '--index': index }}
+                      >
+                        <div className="jukebox-card-inner">
+                          {video.thumbnail && (
+                            <div className="jukebox-image-wrapper">
+                              <img
+                                src={video.thumbnail}
+                                alt={video.title}
+                                className="jukebox-image"
+                              />
+                              <div className="jukebox-play-overlay">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="white">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            </div>
+                          )}
+                          <div className="jukebox-card-info">
+                            <div className="jukebox-title">{video.title}</div>
+                            {video.channel && (
+                              <div className="jukebox-artist">{video.channel}</div>
+                            )}
+                            {video.duration && (
+                              <div className="jukebox-duration">{video.duration}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="jukebox-card-shadow"></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {isArtistSearch && hasMore && (
+                  <div className="load-more-container">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="load-more-button"
+                    >
+                      {loadingMore ? 'Loading...' : 'Load More Songs'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="home-logo-container">
+                <img
+                  src="/iconlogo.png"
+                  alt="SingFi Logo"
+                  className="home-logo-image"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

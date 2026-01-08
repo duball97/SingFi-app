@@ -262,9 +262,10 @@
 }
 
 .auth-button {
-  padding: 14px 32px;
+  padding: 16px 32px;
+  min-height: 48px;
   border-radius: 500px;
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 700;
   border: none;
   cursor: pointer;
@@ -275,6 +276,8 @@
   gap: 0.75rem;
   position: relative;
   overflow: hidden;
+  width: 100%;
+  line-height: 1.5;
 }
 
 .auth-button::before {

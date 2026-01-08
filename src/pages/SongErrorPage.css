@@ -140,21 +140,25 @@
 }
 
 .error-search-button {
-  padding: 1rem 2rem;
+  padding: 16px 32px;
+  min-height: 48px;
   font-size: 1rem;
   font-weight: 700;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  border-radius: 500px;
+  background: #ff6b35;
   color: white;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .error-search-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(255, 107, 53, 0.4);
+  transform: scale(1.05);
+  background: #ff7b45;
 }
 
 .error-search-button:disabled {
@@ -240,13 +244,17 @@
 }
 
 .error-button {
-  padding: 1rem 2rem;
+  padding: 16px 32px;
+  min-height: 48px;
   font-size: 1rem;
   font-weight: 700;
-  border-radius: 16px;
+  border-radius: 500px;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .error-button.secondary {

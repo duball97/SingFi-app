@@ -15,41 +15,38 @@ export default function Header() {
     <header className="site-header">
       <div className="header-container">
         <Link to="/" className="header-logo">
-          <span className="logo-icon">🎤</span>
-          <span className="logo-text">SingFi</span>
+          <img src="/iconlogo.png" alt="SingFi" className="logo-image" />
         </Link>
         <nav className="header-nav">
           <Link to="/" className="nav-link">Home</Link>
-          {!loading && (
+          {loading && user ? (
+            <div className="nav-link" style={{ opacity: 0.5 }}>Loading...</div>
+          ) : user ? (
+            <div className="user-menu">
+              <Link to="/profile" className="user-info">
+                {userProfile?.avatar_url ? (
+                  <img 
+                    src={userProfile.avatar_url} 
+                    alt={userProfile.display_name || user.email}
+                    className="user-avatar"
+                  />
+                ) : (
+                  <div className="user-avatar-placeholder">
+                    {userProfile?.display_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                )}
+                <span className="user-name">
+                  {userProfile?.display_name || user.email?.split('@')[0] || 'User'}
+                </span>
+              </Link>
+              <button onClick={handleSignOut} className="nav-link logout-button">
+                Sign Out
+              </button>
+            </div>
+          ) : (
             <>
-              {user ? (
-                <div className="user-menu">
-                  <Link to="/profile" className="user-info">
-                    {userProfile?.avatar_url ? (
-                      <img 
-                        src={userProfile.avatar_url} 
-                        alt={userProfile.display_name || user.email}
-                        className="user-avatar"
-                      />
-                    ) : (
-                      <div className="user-avatar-placeholder">
-                        {userProfile?.display_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
-                      </div>
-                    )}
-                    <span className="user-name">
-                      {userProfile?.display_name || user.email?.split('@')[0] || 'User'}
-                    </span>
-                  </Link>
-                  <button onClick={handleSignOut} className="nav-link logout-button">
-                    Sign Out
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Link to="/login" className="nav-link">Sign In</Link>
-                  <Link to="/signup" className="nav-link signup-button">Sign Up</Link>
-                </>
-              )}
+              <Link to="/login" className="nav-link" style={{ visibility: 'visible', opacity: 1 }}>Sign In</Link>
+              <Link to="/signup" className="nav-link signup-button" style={{ visibility: 'visible', opacity: 1 }}>Sign Up</Link>
             </>
           )}
         </nav>

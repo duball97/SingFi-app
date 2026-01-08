@@ -116,22 +116,48 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
   }, [pitchBars, currentSegment, windowStart]);
 
   // Calculate pitch to vertical position - memoized constants
-  const PITCH_MIN = 80;
-  const PITCH_MAX = 800;
+  // Extended range to show wider pitch ranges
+  const PITCH_MIN = 40;
+  const PITCH_MAX = 1600;
   const TRACK_HEIGHT = 200;
   const MARGIN = 20;
   const USABLE_HEIGHT = TRACK_HEIGHT - MARGIN * 2;
   
   const pitchToPosition = (pitch) => {
-    const clampedPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch));
-    const pitchPercent = (clampedPitch - PITCH_MIN) / (PITCH_MAX - PITCH_MIN);
-    return TRACK_HEIGHT - MARGIN - (pitchPercent * USABLE_HEIGHT);
+    // Don't clamp - show the actual pitch position even if outside range
+    // Clamp to visible area only for display purposes
+    let pitchPercent;
+    if (pitch <= PITCH_MIN) {
+      pitchPercent = 0;
+    } else if (pitch >= PITCH_MAX) {
+      pitchPercent = 1;
+    } else {
+      pitchPercent = (pitch - PITCH_MIN) / (PITCH_MAX - PITCH_MIN);
+    }
+    const yPos = TRACK_HEIGHT - MARGIN - (pitchPercent * USABLE_HEIGHT);
+    // Clamp to visible track area
+    return Math.max(MARGIN, Math.min(TRACK_HEIGHT - MARGIN, yPos));
   };
 
-  // Get user pitch position
+  // Track last known pitch to keep line visible during detection lag
+  const lastPitchRef = useRef(null);
+  
+  useEffect(() => {
+    if (userPitch && userPitch > 0) {
+      lastPitchRef.current = userPitch;
+    }
+  }, [userPitch]);
+
+  // Get user pitch position - use last known pitch if current is null (for smoother rendering)
   const userPitchY = useMemo(() => {
-    if (!userPitch) return null;
-    return pitchToPosition(userPitch);
+    const pitchToUse = userPitch || lastPitchRef.current;
+    if (!pitchToUse || pitchToUse <= 0) {
+      console.log('❌ No pitch detected. userPitch:', userPitch, 'lastPitch:', lastPitchRef.current);
+      return null;
+    }
+    const yPos = pitchToPosition(pitchToUse);
+    console.log('✅ PITCH DETECTED! Pitch:', pitchToUse.toFixed(1), 'Hz -> Y:', yPos.toFixed(1), 'px');
+    return yPos;
   }, [userPitch]);
 
   // Reset fill state when notes change
@@ -266,15 +292,67 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
           />
         )}
         
-        {/* User's voice indicator - always shows where they're singing */}
-        {userPitch && userPitchY !== null && (
-          <div 
-            className="user-voice-indicator"
-            style={{
-              top: `${userPitchY}px`,
-              left: `${((currentTime - windowStart) / windowDuration) * 100}%`,
-            }}
-          />
+        {/* DEBUG PITCH DISPLAY - MASSIVE AND IMPOSSIBLE TO MISS */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '-60px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.95)',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            border: '3px solid #ffd700',
+            zIndex: 999,
+            pointerEvents: 'none',
+            boxShadow: '0 0 30px rgba(255, 215, 0, 0.8)',
+          }}
+        >
+          <div style={{
+            color: userPitch && userPitch > 0 ? '#22c55e' : '#ef4444',
+            fontSize: '24px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            textShadow: '0 0 10px currentColor',
+          }}>
+            {userPitch && userPitch > 0 ? (
+              <>🎤 SINGING: {Math.round(userPitch)} Hz</>
+            ) : (
+              <>🔇 NO VOICE DETECTED</>
+            )}
+          </div>
+          {userPitchY !== null && (
+            <div style={{ color: '#ffd700', fontSize: '14px', textAlign: 'center', marginTop: '4px' }}>
+              Y Position: {Math.round(userPitchY)}px
+            </div>
+          )}
+        </div>
+
+        {/* User's voice indicator - HORIZONTAL LINE ALWAYS VISIBLE across entire track */}
+        {/* Show line if we have ANY pitch data (current or last known) */}
+        {userPitchY !== null && (
+          <>
+            {/* Horizontal line showing user's pitch - spans entire width */}
+            <div
+              className="user-voice-line"
+              style={{
+                top: `${userPitchY}px`,
+                width: '100%',
+                opacity: userPitch ? 1 : 0.6, // Fade slightly if using last known pitch
+              }}
+            />
+            {/* Dot at current time position for precise tracking */}
+            {currentTime >= windowStart && currentTime < windowStart + windowDuration && (
+              <div
+                className="user-voice-dot"
+                style={{
+                  top: `${userPitchY}px`,
+                  left: `${((currentTime - windowStart) / windowDuration) * 100}%`,
+                  opacity: userPitch ? 1 : 0.6, // Fade slightly if using last known pitch
+                }}
+              />
+            )}
+          </>
         )}
         
         {/* Render the note bars */}
@@ -324,53 +402,99 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
                 height: `${barHeight}px`,
               }}
             >
-              {/* Render filled segments - only parts where user was on target */}
+              {/* NO FILLS HERE - fills appear at user's actual pitch position below */}
+            </div>
+          );
+        })}
+        
+        {/* Render fills at USER'S ACTUAL PITCH POSITION - appears where they sing! */}
+        {userPitchY !== null && pitchBars.map((bar) => {
+          const barStartPercent = Math.max(0, ((bar.start - windowStart) / windowDuration) * 100);
+          const barEndPercent = Math.min(100, ((bar.end - windowStart) / windowDuration) * 100);
+          const barWidth = barEndPercent - barStartPercent;
+          
+          // Check if currently active
+          const isActive = currentTime >= bar.start && currentTime < bar.end;
+          if (!isActive) return null;
+          
+          // Get filled segments for this bar
+          const fillState = barFillsRef.current[bar.id];
+          const filledSegments = fillState?.filledSegments || [];
+          
+          // Check if currently on target (with octave tolerance)
+          let isCurrentlyOnTarget = false;
+          if (userPitch) {
+            let pitchDiff = Math.abs(userPitch - bar.targetPitch);
+            isCurrentlyOnTarget = pitchDiff <= PITCH_TOLERANCE;
+            
+            // Also check octave variations
+            if (!isCurrentlyOnTarget && bar.targetPitch > 0) {
+              const octaveUp = bar.targetPitch * 2;
+              const octaveDown = bar.targetPitch / 2;
+              isCurrentlyOnTarget = 
+                Math.abs(userPitch - octaveUp) <= PITCH_TOLERANCE ||
+                Math.abs(userPitch - octaveDown) <= PITCH_TOLERANCE;
+            }
+          }
+          
+          // Only render fills if on target or have filled segments
+          if (!isCurrentlyOnTarget && filledSegments.length === 0) return null;
+          
+          const fillHeight = 20; // Height of fill bars
+          const fillTop = userPitchY - fillHeight / 2; // Position at user's actual pitch
+          
+          return (
+            <div key={`fill-${bar.id}`} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}>
+              {/* Render filled segments at user's pitch position */}
               {filledSegments.map((segment, segIdx) => {
-                // Calculate segment position and width within the bar
                 const segmentStartPercent = ((segment.start - bar.start) / bar.duration) * 100;
                 const segmentEndPercent = ((segment.end - bar.start) / bar.duration) * 100;
-                const segmentWidth = segmentEndPercent - segmentStartPercent;
                 
-                // Clamp to bar bounds
+                // Calculate absolute position within track
                 const clampedStart = Math.max(0, Math.min(100, segmentStartPercent));
                 const clampedEnd = Math.max(0, Math.min(100, segmentEndPercent));
                 const clampedWidth = clampedEnd - clampedStart;
+                const clampedLeft = barStartPercent + (clampedStart / 100) * barWidth;
+                const clampedWidthPx = (clampedWidth / 100) * barWidth;
                 
-                if (clampedWidth <= 0) return null;
+                if (clampedWidthPx <= 0) return null;
                 
                 return (
                   <div
                     key={segIdx}
-                    className="pitch-bar-fill on-target"
+                    className="pitch-bar-fill user-pitch-fill"
                     style={{
-                      left: `${clampedStart}%`,
-                      width: `${clampedWidth}%`,
-                      height: `${barHeight}px`,
-                      top: '0px',
+                      left: `${clampedLeft}%`,
+                      width: `${clampedWidthPx}%`,
+                      height: `${fillHeight}px`,
+                      top: `${fillTop}px`,
                     }}
                   />
                 );
               })}
               
-              {/* Real-time fill extension - smoothly extends the last segment when on target */}
-              {isActive && isCurrentlyOnTarget && userPitch && (() => {
+              {/* Real-time fill extension at user's actual pitch position */}
+              {isCurrentlyOnTarget && userPitch && (() => {
                 const lastSegment = filledSegments[filledSegments.length - 1];
                 const fillStartPercent = lastSegment 
                   ? ((lastSegment.end - bar.start) / bar.duration) * 100
                   : 0;
                 const fillEndPercent = ((currentTime - bar.start) / bar.duration) * 100;
-                const fillWidth = Math.max(0, fillEndPercent - fillStartPercent);
+                const fillWidthPercent = Math.max(0, fillEndPercent - fillStartPercent);
                 
-                if (fillWidth <= 0) return null;
+                if (fillWidthPercent <= 0) return null;
+                
+                const fillLeft = barStartPercent + (fillStartPercent / 100) * barWidth;
+                const fillWidthPx = (fillWidthPercent / 100) * barWidth;
                 
                 return (
                   <div 
-                    className="pitch-bar-fill on-target realtime"
+                    className="pitch-bar-fill user-pitch-fill realtime"
                     style={{
-                      left: `${fillStartPercent}%`,
-                      width: `${fillWidth}%`,
-                      height: `${barHeight}px`,
-                      top: '0px',
+                      left: `${fillLeft}%`,
+                      width: `${fillWidthPx}%`,
+                      height: `${fillHeight}px`,
+                      top: `${fillTop}px`,
                     }}
                   />
                 );

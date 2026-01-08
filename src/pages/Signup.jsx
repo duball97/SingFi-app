@@ -38,6 +38,13 @@ export default function Signup() {
           display_name: displayName,
           auth_provider: 'email',
         });
+        
+        // Refresh session to trigger auth state update
+        await supabase.auth.getSession();
+        
+        // Force page reload to ensure auth state is updated in all components
+        window.location.href = '/';
+        return;
       }
 
       navigate('/');
@@ -110,6 +117,13 @@ export default function Signup() {
           wallet_type: 'metamask',
           auth_provider: 'wallet',
         });
+        
+        // Refresh session to trigger auth state update
+        await supabase.auth.getSession();
+        
+        // Force page reload to ensure auth state is updated in all components
+        window.location.href = '/';
+        return;
       }
 
       navigate('/');

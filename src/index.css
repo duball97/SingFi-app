@@ -32,8 +32,9 @@ body {
 button {
   border-radius: 500px;
   border: none;
-  padding: 14px 32px;
-  font-size: 0.875rem;
+  padding: 16px 32px;
+  min-height: 48px;
+  font-size: 1rem;
   font-weight: 700;
   font-family: inherit;
   background: #ff6b35;
@@ -41,17 +42,22 @@ button {
   cursor: pointer;
   transition: all 0.2s ease;
   text-transform: none;
-  letter-spacing: 0.5px;
-  min-width: 0;
+  letter-spacing: 0;
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.5;
 }
 
 button:hover:not(:disabled) {
-  transform: scale(1.04);
+  transform: scale(1.05);
   background: #ff7b45;
 }
 
 button:active:not(:disabled) {
   transform: scale(1);
+  background: #ff6b35;
 }
 
 button:disabled {

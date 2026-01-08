@@ -10,6 +10,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [userPitch, setUserPitch] = useState(null);
+  const [volumeLevel, setVolumeLevel] = useState(0); // For debug display
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [gameState, setGameState] = useState('loading'); // 'loading', 'countdown', 'playing', 'paused', 'ended', 'buffering'
@@ -24,6 +25,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   const isPlayingRef = useRef(false);
   const animationFrameRef = useRef(null);
   const playerReadyRef = useRef(false);
+  const tryPlayTimeoutRef = useRef(null);
   
   // Audio refs for pitch detection
   const audioContextRef = useRef(null);
@@ -68,19 +70,19 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         await audioContextRef.current.close().catch(() => {});
       }
 
-      // Request microphone with echo cancellation and noise suppression
-      // These constraints help filter out PC audio and background noise
+      // Request microphone - DISABLED filters that might suppress voice
+      // autoGainControl can suppress voice if it thinks it's noise
       const audioConstraints = {
-        echoCancellation: true,      // Cancel echo from speakers (most important!)
-        noiseSuppression: true,      // Suppress background noise
-        autoGainControl: true,       // Auto-adjust microphone gain
+        echoCancellation: true,      // Keep echo cancellation to prevent feedback
+        noiseSuppression: false,     // DISABLED - might filter out voice as noise!
+        autoGainControl: false,      // DISABLED - can suppress voice when it thinks it's too loud
         // Chrome-specific constraints (will be ignored by other browsers)
         ...(navigator.userAgent.includes('Chrome') && {
           googEchoCancellation: true,
-          googNoiseSuppression: true,
-          googAutoGainControl: true,
-          googHighpassFilter: true,    // Filter out low frequencies
-          googTypingNoiseDetection: true,
+          googNoiseSuppression: false, // DISABLED
+          googAutoGainControl: false,  // DISABLED - this was likely the culprit!
+          googHighpassFilter: false,   // DISABLED - might filter low frequencies in voice
+          googTypingNoiseDetection: false,
         })
       };
       
@@ -92,8 +94,9 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(stream);
 
-      analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.8;
+      // Use larger FFT size for better frequency resolution
+      analyser.fftSize = 4096; // Increased from 2048 for better pitch detection
+      analyser.smoothingTimeConstant = 0.3; // Lowered from 0.8 for more responsive detection
       microphone.connect(analyser);
 
       audioContextRef.current = audioContext;
@@ -232,7 +235,9 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   // Pitch detection loop
   const detectPitch = useCallback(() => {
     try {
-      if (!analyserRef.current || !dataArrayRef.current || !isPlayingRef.current || !audioContextRef.current) {
+      // DON'T stop detection on pause - keep detecting even when paused!
+      // Only stop if mic is inactive or audio context is closed
+      if (!analyserRef.current || !dataArrayRef.current || !audioContextRef.current) {
         return;
       }
 
@@ -254,11 +259,18 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         sumSquares += data[i] * data[i];
       }
       const rms = Math.sqrt(sumSquares / data.length);
-      const volumeThreshold = 0.005; // Lowered threshold to be more forgiving (was 0.01)
+      const volumeThreshold = 0.001; // LOWERED SIGNIFICANTLY - detect even very quiet sounds
       
-      // Only process pitch if volume is above threshold (user is actually singing)
-      if (rms < volumeThreshold) {
-        setUserPitch(null);
+      // Update volume level for debug display (0-100%) - use better scaling
+      // RMS typically ranges from 0 to ~0.1 for normal speech, so scale accordingly
+      const volumePercent = Math.min(100, Math.max(0, (rms / 0.05) * 100)); // Scale based on typical RMS range
+      setVolumeLevel(volumePercent);
+      
+      // ALWAYS process pitch detection - don't stop on low volume!
+      // Volume threshold is just for display, not for blocking detection
+      // Only skip if there's literally no signal (RMS extremely low)
+      if (rms < 0.0001) {
+        // Only skip if there's literally no audio signal at all
         micAnimationRef.current = requestAnimationFrame(detectPitch);
         return;
       }
@@ -267,9 +279,9 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       let maxCorrelation = 0;
       let maxPeriod = 0;
       
-      // Calculate valid period range for human voice (80Hz to 2000Hz)
-      const minPeriod = Math.max(20, Math.floor(sampleRate / 2000)); // Max 2000Hz
-      const maxPeriodLimit = Math.min(Math.floor(bufferLength / 2), Math.floor(sampleRate / 80)); // Min 80Hz
+      // Calculate valid period range for human voice - EXTENDED range (50Hz to 3000Hz)
+      const minPeriod = Math.max(20, Math.floor(sampleRate / 3000)); // Max 3000Hz (extended from 2000Hz)
+      const maxPeriodLimit = Math.min(Math.floor(bufferLength / 2), Math.floor(sampleRate / 50)); // Min 50Hz (extended from 80Hz)
       
       // Use step size for faster computation while maintaining accuracy
       const step = Math.max(1, Math.floor((maxPeriodLimit - minPeriod) / 200));
@@ -311,132 +323,158 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         }
       }
 
-      if (maxPeriod > 0 && maxCorrelation > 0.1) { // Minimum correlation threshold
+      // LOWERED threshold and EXTENDED range to ALWAYS show user's voice
+      let detectedFrequency = null;
+      
+      // LOWERED correlation threshold even more to detect quiet singing
+      if (maxPeriod > 0 && maxCorrelation > 0.02) { // Lowered from 0.05 to 0.02 to detect even quieter sounds
         const rawFrequency = sampleRate / maxPeriod;
-        if (rawFrequency > 80 && rawFrequency < 2000) {
+        // EXTENDED range: 50Hz to 3000Hz to show wider pitch ranges
+        if (rawFrequency > 50 && rawFrequency < 3000) {
           // Smooth pitch detection with previous value to reduce jitter
           const previousPitch = userPitch;
           let frequency;
-          if (previousPitch && Math.abs(rawFrequency - previousPitch) < 100) {
-            // Smooth if change is reasonable (within 100Hz)
+          if (previousPitch && Math.abs(rawFrequency - previousPitch) < 200) {
+            // Smooth if change is reasonable (increased tolerance to 200Hz for smoother tracking)
             frequency = previousPitch * 0.7 + rawFrequency * 0.3;
           } else {
             frequency = rawFrequency;
           }
           setUserPitch(frequency);
+          detectedFrequency = frequency;
+          console.log('🎤 PITCH DETECTED:', frequency.toFixed(1), 'Hz, Volume:', volumePercent.toFixed(1), '%, RMS:', rms.toFixed(5), 'Correlation:', maxCorrelation.toFixed(4));
+        } else {
+          // Frequency outside extended range - still show it but clamp to display range
+          if (rawFrequency > 0) {
+            const clampedFreq = Math.max(50, Math.min(3000, rawFrequency));
+            setUserPitch(clampedFreq);
+            detectedFrequency = clampedFreq;
+            console.log('🎤 PITCH DETECTED (clamped):', clampedFreq.toFixed(1), 'Hz, Volume:', volumePercent.toFixed(1), '%');
+          }
+        }
+      } else {
+        // Very low correlation - log for debugging
+        if (volumePercent > 1 || rms > 0.001) {
+          // If there's volume but no pitch, log it
+          console.log('⚠️ Volume detected (', volumePercent.toFixed(1), '%, RMS:', rms.toFixed(5), ') but no pitch (correlation:', maxCorrelation.toFixed(4), ')');
+        }
+        // Keep showing last pitch for smoother experience - don't clear it
+      }
+      
+      // Only award score if user is on target for an active note
+      if (detectedFrequency && detectedFrequency > 0) {
+        const currentTimeValue = currentTimeRef.current;
+        if (notes && Array.isArray(notes) && notes.length > 0 && currentTimeValue) {
+          // Find active note (note that contains currentTime)
+          const activeNote = notes.find(note => 
+            currentTimeValue >= note.start && currentTimeValue <= note.end
+          );
           
-          // Only award score if user is on target for an active note
-          const currentTimeValue = currentTimeRef.current;
-          if (notes && Array.isArray(notes) && notes.length > 0 && currentTimeValue) {
-            // Find active note (note that contains currentTime)
-            const activeNote = notes.find(note => 
-              currentTimeValue >= note.start && currentTimeValue <= note.end
-            );
+          if (activeNote) {
+            // Calculate accuracy based on pitch difference with octave tolerance
+            const tolerance = 300; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
             
-            if (activeNote) {
-              // Calculate accuracy based on pitch difference with octave tolerance
-              const tolerance = 300; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
-              
-              // Check base pitch and octave variations
-              let pitchDiff = Math.abs(frequency - activeNote.targetPitch);
-              let isOnTarget = pitchDiff <= tolerance;
-              
-              // Also check octave variations (singing an octave higher/lower)
-              if (!isOnTarget && activeNote.targetPitch > 0) {
-                const octaveUp = activeNote.targetPitch * 2;
-                const octaveDown = activeNote.targetPitch / 2;
-                const diffUp = Math.abs(frequency - octaveUp);
-                const diffDown = Math.abs(frequency - octaveDown);
-                if (diffUp <= tolerance || diffDown <= tolerance) {
-                  isOnTarget = true;
-                  pitchDiff = Math.min(diffUp, diffDown, pitchDiff);
-                }
-              }
-              
-              // Award proportional points even when partially on target
-              // Points scale from 0 (far off) to full (perfect match)
-              // This ensures partial bar fills give proportional scores
-              let accuracy = 0;
-              if (isOnTarget) {
-                // Within tolerance: 1.0 when perfect, decreasing to 0.0 at edge
-                accuracy = 1 - (pitchDiff / tolerance);
-              } else {
-                // Outside tolerance but still award some points for being close
-                // Gradually decrease points up to 2x tolerance
-                const extendedTolerance = tolerance * 2;
-                if (pitchDiff <= extendedTolerance) {
-                  accuracy = 0.5 * (1 - (pitchDiff - tolerance) / tolerance); // 50% max when just outside tolerance (increased from 30%)
-                }
-              }
-              
-              if (accuracy > 0) {
-                // Award points per second, scaled by accuracy
-                // Max 100k total score, so calculate points based on song duration and note density
-                // Using requestAnimationFrame timing (~16-17ms per frame at 60fps)
-                const timeWeight = 0.016; // ~16ms per frame
-                // Base rate: points per second when perfect
-                // Adjusted to ensure max score of ~100k for a typical song
-                const basePointsPerSecond = 100; // Increased for better visibility
-                const points = basePointsPerSecond * accuracy * timeWeight;
-                
-                // Accumulate score to ensure partial fills are counted
-                scoreAccumulatorRef.current += points;
-                
-                // Update score state every ~50ms for more responsive updates
-                const now = Date.now();
-                if (now - lastScoreUpdateRef.current >= 50) {
-                  if (scoreAccumulatorRef.current > 0) {
-                    setScore(prev => {
-                      const newScore = prev + scoreAccumulatorRef.current;
-                      // Cap score at 100k
-                      return Math.min(newScore, 100000);
-                    });
-                    scoreAccumulatorRef.current = 0;
-                  }
-                  lastScoreUpdateRef.current = now;
-                }
+            // Check base pitch and octave variations
+            let pitchDiff = Math.abs(detectedFrequency - activeNote.targetPitch);
+            let isOnTarget = pitchDiff <= tolerance;
+            
+            // Also check octave variations (singing an octave higher/lower)
+            if (!isOnTarget && activeNote.targetPitch > 0) {
+              const octaveUp = activeNote.targetPitch * 2;
+              const octaveDown = activeNote.targetPitch / 2;
+              const diffUp = Math.abs(detectedFrequency - octaveUp);
+              const diffDown = Math.abs(detectedFrequency - octaveDown);
+              if (diffUp <= tolerance || diffDown <= tolerance) {
+                isOnTarget = true;
+                pitchDiff = Math.min(diffUp, diffDown, pitchDiff);
               }
             }
-            // If no active note, no points awarded
+            
+            // Award proportional points even when partially on target
+            // Points scale from 0 (far off) to full (perfect match)
+            // This ensures partial bar fills give proportional scores
+            let accuracy = 0;
+            if (isOnTarget) {
+              // Within tolerance: 1.0 when perfect, decreasing to 0.0 at edge
+              accuracy = 1 - (pitchDiff / tolerance);
+            } else {
+              // Outside tolerance but still award some points for being close
+              // Gradually decrease points up to 2x tolerance
+              const extendedTolerance = tolerance * 2;
+              if (pitchDiff <= extendedTolerance) {
+                accuracy = 0.5 * (1 - (pitchDiff - tolerance) / tolerance); // 50% max when just outside tolerance (increased from 30%)
+              }
+            }
+            
+            if (accuracy > 0) {
+              // Award points per second, scaled by accuracy
+              // Max 100k total score, so calculate points based on song duration and note density
+              // Using requestAnimationFrame timing (~16-17ms per frame at 60fps)
+              const timeWeight = 0.016; // ~16ms per frame
+              // Base rate: points per second when perfect
+              // Adjusted to ensure max score of ~100k for a typical song
+              const basePointsPerSecond = 100; // Increased for better visibility
+              const points = basePointsPerSecond * accuracy * timeWeight;
+              
+              // Accumulate score to ensure partial fills are counted
+              scoreAccumulatorRef.current += points;
+              
+              // Update score state every ~50ms for more responsive updates
+              const now = Date.now();
+              if (now - lastScoreUpdateRef.current >= 50) {
+                if (scoreAccumulatorRef.current > 0) {
+                  setScore(prev => {
+                    const newScore = prev + scoreAccumulatorRef.current;
+                    // Cap score at 100k
+                    return Math.min(newScore, 100000);
+                  });
+                  scoreAccumulatorRef.current = 0;
+                }
+                lastScoreUpdateRef.current = now;
+              }
+            }
           }
+          // If no active note, no points awarded
         }
       }
 
-      if (isPlayingRef.current && isMicActive && audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      // ALWAYS continue the loop if mic is active - don't stop even on low volume
+      // Use refs instead of state to avoid dependency issues
+      if (isMicActive && audioContextRef.current && audioContextRef.current.state !== 'closed') {
         micAnimationRef.current = requestAnimationFrame(detectPitch);
       }
     } catch (error) {
       console.error('Error in pitch detection:', error);
-      // Stop detection on error
-      if (micAnimationRef.current) {
-        cancelAnimationFrame(micAnimationRef.current);
-        micAnimationRef.current = null;
+      // Continue loop even on error - don't stop detection
+      if (isMicActive && audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        micAnimationRef.current = requestAnimationFrame(detectPitch);
       }
     }
   }, [isMicActive]);
 
-  // Start pitch detection when playing
+  // Start pitch detection when mic is active - KEEP LOOP RUNNING CONTINUOUSLY
+  // Don't cancel/restart on every state change - this causes lag!
   useEffect(() => {
-    if (isPlaying && isMicActive && analyserRef.current && audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      // Cancel any existing animation frame
-      if (micAnimationRef.current) {
-        cancelAnimationFrame(micAnimationRef.current);
+    if (isMicActive && analyserRef.current && audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      // Only start if not already running - don't cancel existing loop!
+      if (!micAnimationRef.current) {
+        detectPitch();
       }
-      detectPitch();
     } else {
-      // Stop detection if conditions aren't met
-      if (micAnimationRef.current) {
+      // Only stop if mic is completely disabled
+      if (micAnimationRef.current && !isMicActive) {
         cancelAnimationFrame(micAnimationRef.current);
         micAnimationRef.current = null;
       }
     }
     return () => {
+      // Cleanup on unmount only
       if (micAnimationRef.current) {
         cancelAnimationFrame(micAnimationRef.current);
         micAnimationRef.current = null;
       }
     };
-  }, [isPlaying, isMicActive, detectPitch]);
+  }, [isMicActive, detectPitch]); // Removed isPlaying - don't restart on play/pause
 
   // Cleanup on unmount
   useEffect(() => {
@@ -468,7 +506,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
     }
   };
 
-  // Countdown logic
+  // Countdown logic - only runs when countdown finishes
   useEffect(() => {
     if (gameState !== 'countdown') return;
     
@@ -477,36 +515,127 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         setCountdown(prev => prev - 1);
       }, 1000);
       return () => clearTimeout(timer);
-    } else {
-      // Countdown finished - start the game!
-      setGameState('playing');
-      // Track game start time
-      if (!gameStartTimeRef.current) {
-        gameStartTimeRef.current = Date.now();
-      }
-      startMicrophone();
-      
-      // Wait for player to be fully ready, then play
-      const tryPlay = () => {
-        if (playerReadyRef.current && player && typeof player.playVideo === 'function') {
-          try {
-            // Check if player is actually ready by checking internal state
-            const playerState = player.getPlayerState ? player.getPlayerState() : null;
-            player.playVideo();
-            console.log('▶️ Playing video, player state:', playerState);
-          } catch (error) {
-            console.error('Error playing video:', error);
-            // Retry after a short delay
-            setTimeout(tryPlay, 500);
-          }
-        } else {
-          // Player not ready yet, retry
-          setTimeout(tryPlay, 100);
-        }
-      };
-      
-      tryPlay();
     }
+    
+    // Countdown finished - start the game!
+    setGameState('playing');
+    // Track game start time
+    if (!gameStartTimeRef.current) {
+      gameStartTimeRef.current = Date.now();
+    }
+    startMicrophone();
+    
+    // Wait for player to be fully ready, then play
+    // Track retry attempts to prevent infinite loops
+    let retryCount = 0;
+    const maxRetries = 30; // Max 30 retries (3 seconds total)
+    let isCancelled = false;
+    
+    const tryPlay = () => {
+      // Check if cancelled (e.g., user paused)
+      if (isCancelled) return;
+      
+      retryCount++;
+      
+      // Check if player exists and is ready
+      if (!player || !playerReadyRef.current) {
+        if (retryCount < maxRetries && !isCancelled) {
+          tryPlayTimeoutRef.current = setTimeout(tryPlay, 100);
+        } else if (retryCount >= maxRetries) {
+          console.error('Max retries reached: Player not ready');
+        }
+        return;
+      }
+      
+      // Check if player has the necessary methods
+      if (typeof player.playVideo !== 'function') {
+        if (retryCount < maxRetries && !isCancelled) {
+          tryPlayTimeoutRef.current = setTimeout(tryPlay, 100);
+        }
+        return;
+      }
+      
+      // Check if player has internal iframe (YouTube API requirement)
+      // The error "Cannot read properties of null (reading 'src')" happens
+      // when the iframe doesn't exist yet
+      try {
+        // Try to get iframe - this is what YouTube API needs
+        let iframe = null;
+        try {
+          iframe = player.getIframe ? player.getIframe() : null;
+        } catch (e) {
+          // getIframe might not exist or might throw
+        }
+        
+        // If we can't get iframe, try to find it in the DOM
+        if (!iframe) {
+          const playerContainer = document.querySelector('.game-youtube-player');
+          if (playerContainer) {
+            iframe = playerContainer.querySelector('iframe');
+          }
+        }
+        
+        // If still no iframe, wait a bit longer
+        if (!iframe || !iframe.src) {
+          if (retryCount < maxRetries && !isCancelled) {
+            tryPlayTimeoutRef.current = setTimeout(tryPlay, 200);
+          } else if (retryCount >= maxRetries) {
+            console.error('Max retries reached: Iframe not ready');
+          }
+          return;
+        }
+        
+        // Try to get player state - if it throws, player isn't ready
+        let playerState = -1;
+        try {
+          playerState = player.getPlayerState ? player.getPlayerState() : -1;
+        } catch (e) {
+          // Player state method failed, retry
+          if (retryCount < maxRetries && !isCancelled) {
+            tryPlayTimeoutRef.current = setTimeout(tryPlay, 200);
+          }
+          return;
+        }
+        
+        // Add a small delay to ensure iframe is fully initialized
+        // YouTube API sometimes needs a moment after iframe appears
+        if (retryCount < 5 && !isCancelled) {
+          tryPlayTimeoutRef.current = setTimeout(tryPlay, 100);
+          return;
+        }
+        
+        // Check again if cancelled before attempting to play
+        if (isCancelled) return;
+        
+        // Player is ready, attempt to play
+        player.playVideo();
+        console.log('▶️ Playing video, player state:', playerState);
+      } catch (error) {
+        // Only log error if we've tried a few times
+        if (retryCount > 3) {
+          console.error('Error playing video:', error);
+        }
+        
+        // Only retry if we haven't exceeded max retries and not cancelled
+        if (retryCount < maxRetries && !isCancelled) {
+          tryPlayTimeoutRef.current = setTimeout(tryPlay, 300);
+        } else if (retryCount >= maxRetries) {
+          console.error('Max retries reached for video playback after', retryCount, 'attempts');
+        }
+      }
+    };
+    
+    // Wait a bit before first attempt to let iframe initialize
+    tryPlayTimeoutRef.current = setTimeout(tryPlay, 300);
+    
+    // Cleanup: cancel tryPlay if component unmounts or effect re-runs
+    return () => {
+      isCancelled = true;
+      if (tryPlayTimeoutRef.current) {
+        clearTimeout(tryPlayTimeoutRef.current);
+        tryPlayTimeoutRef.current = null;
+      }
+    };
   }, [gameState, countdown, player, startMicrophone]);
 
   const handleStateChange = (event) => {
@@ -652,12 +781,28 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   }, [player]);
 
   const handlePlayPause = () => {
-    if (!player) return;
+    if (!player || !playerReadyRef.current) return;
     
-    if (isPlaying) {
-      player.pauseVideo();
-    } else {
-      player.playVideo();
+    // Cancel any pending tryPlay timeouts
+    if (tryPlayTimeoutRef.current) {
+      clearTimeout(tryPlayTimeoutRef.current);
+      tryPlayTimeoutRef.current = null;
+    }
+    
+    try {
+      if (isPlaying) {
+        player.pauseVideo();
+      } else {
+        // Only play if player is ready and has iframe
+        const iframe = player.getIframe ? player.getIframe() : null;
+        if (iframe && iframe.src) {
+          player.playVideo();
+        } else {
+          console.warn('Player not ready for playback');
+        }
+      }
+    } catch (error) {
+      console.error('Error in handlePlayPause:', error);
     }
   };
 
@@ -864,6 +1009,63 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
               {Math.round(userPitch)} Hz
             </div>
           )}
+        </div>
+
+        {/* Debug Voice Frequency Indicator - Bottom Left */}
+        <div className="voice-frequency-debug">
+          <div className="voice-debug-header">
+            <span className="voice-debug-icon">🎤</span>
+            <span className="voice-debug-title">Voice Detection</span>
+          </div>
+          <div className="voice-debug-content">
+            <div className="voice-debug-status">
+              <span className={`voice-debug-indicator ${isMicActive ? 'active' : 'inactive'}`}>
+                {isMicActive ? '●' : '○'}
+              </span>
+              <span className="voice-debug-text">
+                {isMicActive ? 'Mic Active' : 'Mic Inactive'}
+              </span>
+            </div>
+            {isMicActive ? (
+              <>
+                <div className="voice-debug-frequency">
+                  <span className="voice-debug-label">Frequency:</span>
+                  <span className="voice-debug-value">
+                    {userPitch ? `${Math.round(userPitch)} Hz` : 'No signal'}
+                  </span>
+                </div>
+                <div className="voice-debug-volume">
+                  <span className="voice-debug-label">Volume:</span>
+                  <span className="voice-debug-value" style={{ color: volumeLevel > 5 ? '#22c55e' : '#ff6b35' }}>
+                    {Math.round(volumeLevel)}%
+                  </span>
+                </div>
+                <div className="voice-debug-visual">
+                  <div 
+                    className="voice-debug-bar voice-debug-volume-bar"
+                    style={{
+                      width: `${volumeLevel}%`,
+                      backgroundColor: volumeLevel > 5 ? '#22c55e' : '#ff6b35'
+                    }}
+                  />
+                </div>
+                {userPitch && (
+                  <div className="voice-debug-visual">
+                    <div className="voice-debug-label" style={{ fontSize: '0.7rem', marginBottom: '0.25rem' }}>Pitch:</div>
+                    <div 
+                      className="voice-debug-bar voice-debug-pitch-bar"
+                      style={{
+                        width: `${Math.min(100, (userPitch / 1600) * 100)}%`,
+                        backgroundColor: userPitch > 80 && userPitch < 3000 ? '#22c55e' : '#ff6b35'
+                      }}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="voice-debug-note">Enable microphone to see detection</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

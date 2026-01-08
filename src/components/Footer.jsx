@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="footer-container">
         <div className="footer-content">
           <div className="footer-brand">
-            <span className="footer-logo-icon">🎤</span>
+            <img src="/iconlogo.png" alt="SingFi Icon" className="footer-icon-logo" />
             <span className="footer-logo-text">SingFi</span>
           </div>
           <div className="footer-info">

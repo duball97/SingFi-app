@@ -126,28 +126,30 @@
 }
 
 .play-ready-button {
-  padding: 1rem 2.5rem;
-  font-size: 1.1rem;
+  padding: 16px 48px;
+  min-height: 56px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: white;
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  background: #22c55e;
   border: none;
-  border-radius: 16px;
+  border-radius: 500px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 14px 0 rgba(34, 197, 94, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  text-transform: none;
+  letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .play-ready-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px 0 rgba(34, 197, 94, 0.5);
-  background: linear-gradient(135deg, #2dd36f 0%, #22c55e 100%);
+  transform: scale(1.05);
+  background: #2dd36f;
 }
 
 .play-ready-button:active {
-  transform: translateY(0);
+  transform: scale(1);
 }
 
 .song-title {
@@ -369,28 +371,30 @@
 }
 
 .go-home-button {
-  padding: 1rem 2.5rem;
+  padding: 16px 48px;
+  min-height: 48px;
   font-size: 1rem;
   font-weight: 700;
   color: white;
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  background: #ff6b35;
   border: none;
-  border-radius: 16px;
+  border-radius: 500px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 14px 0 rgba(255, 107, 53, 0.2);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  text-transform: none;
+  letter-spacing: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .go-home-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px 0 rgba(255, 107, 53, 0.4);
-  background: linear-gradient(135deg, #ff7b45 0%, #ffa31e 100%);
+  transform: scale(1.05);
+  background: #ff7b45;
 }
 
 .go-home-button:active {
-  transform: translateY(0);
+  transform: scale(1);
 }
 
 /* Responsive Design */
@@ -444,7 +448,8 @@
   }
 
   .play-ready-button {
-    padding: 0.9rem 2rem;
+    padding: 14px 40px;
+    min-height: 48px;
     font-size: 1rem;
   }
 

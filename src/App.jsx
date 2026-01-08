@@ -30,7 +30,7 @@ function App() {
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/song-error" element={<SongErrorPage />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/profile" element={<Profile />} />
+
             </Routes>
           </main>
           <Footer />

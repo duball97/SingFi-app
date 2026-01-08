@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -18,31 +19,32 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let mounted = true;
-    
-    // Get initial session - no timeout needed, session fetch is fast
+
+    // Get initial session - Standard Implementation
     const initAuth = async () => {
       try {
+        console.log('AuthContext: Getting initial session...');
+        // Standard call without timeout race
         const { data: { session }, error } = await supabase.auth.getSession();
-        
+
         if (!mounted) return;
-        
+
         if (error) {
-          console.error('Error getting session:', error);
-          setLoading(false);
-          return;
+          console.error('AuthContext: Error getting session:', error);
+          // Don't throw, just let it be null
         }
-        
+
+        console.log('AuthContext: Session retrieved:', session?.user ? session.user.id : 'No user');
         setUser(session?.user ?? null);
+
         if (session?.user) {
           await fetchUserProfile(session.user.id);
         } else {
           setLoading(false);
         }
       } catch (error) {
-        console.error('Error getting session:', error);
-        if (mounted) {
-          setLoading(false);
-        }
+        console.error('AuthContext: Unexpected error in initAuth:', error);
+        if (mounted) setLoading(false);
       }
     };
 
@@ -51,12 +53,16 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`AuthContext: Auth change event: ${event}`);
       if (!mounted) return;
-      
+
       setUser(session?.user ?? null);
+
       if (session?.user) {
-        await fetchUserProfile(session.user.id);
+        if (!userProfile || userProfile.id !== session.user.id) {
+          await fetchUserProfile(session.user.id);
+        }
       } else {
         setUserProfile(null);
         setLoading(false);
@@ -72,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   const fetchUserProfile = async (userId) => {
     try {
       // Increased timeout to 30 seconds and make it non-blocking
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Profile fetch timeout')), 30000)
       );
 
@@ -87,16 +93,37 @@ export const AuthProvider = ({ children }) => {
       // Always set loading to false, even if profile doesn't exist
       if (error) {
         if (error.code === 'PGRST116') {
-          // No profile found - that's okay, user exists but profile doesn't
-          // Create a minimal profile from auth user data
+          // No profile found - User exists in Auth but not in Table
+          // Create the profile now (Self-Healing)
+          console.log('AuthContext: User profile missing. Attempting to auto-create...');
           const { data: { session } } = await supabase.auth.getSession();
+
           if (session?.user) {
-            setUserProfile({
+            const newProfile = {
               id: session.user.id,
               email: session.user.email,
               display_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
               avatar_url: session.user.user_metadata?.avatar_url,
-            });
+              auth_provider: session.user.app_metadata?.provider || 'email',
+            };
+
+            console.log('AuthContext: Inserting payload:', newProfile);
+
+            const { data: createdUser, error: insertError } = await supabase
+              .from('singfi_users')
+              .upsert(newProfile)
+              .select()
+              .single();
+
+            if (insertError) {
+              console.error('AuthContext: FATAL - Could not auto-create user:', insertError);
+              console.error('AuthContext: ⚠️ This suggests a Row Level Security (RLS) policy violation.');
+              // Fallback to local only so the app doesn't crash
+              setUserProfile(newProfile);
+            } else {
+              console.log('AuthContext: ✅ User profile auto-created successfully:', createdUser);
+              setUserProfile(createdUser);
+            }
           } else {
             setUserProfile(null);
           }
@@ -109,7 +136,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUserProfile(null);
       }
-      
+
       // ALWAYS set loading to false
       setLoading(false);
     } catch (error) {

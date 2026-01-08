@@ -1,31 +1,23 @@
 .site-header {
-  position: sticky;
-  top: 1.5rem;
+  position: relative;
   z-index: 100;
   width: 100%;
-  padding: 0 2rem;
-  overflow: visible;
+  padding: 0;
 }
 
 .header-container {
   width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 1rem 2.5rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 1rem 3rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 2rem;
   position: relative;
-  overflow: visible;
-  background: linear-gradient(135deg,
-    rgba(255, 107, 53, 0.15) 0%,
-    rgba(255, 215, 0, 0.1) 50%,
-    rgba(255, 107, 53, 0.15) 100%
-  );
-  border-radius: 50px;
-  border: 2px solid rgba(255, 107, 53, 0.4);
-  backdrop-filter: blur(20px);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .header-logo {
@@ -79,7 +71,7 @@
   text-decoration: none !important;
   font-weight: 500 !important;
   font-size: 0.9rem !important;
-  font-family: 'Inter', sans-serif !important;
+  font-family: 'Sohne', sans-serif !important;
   padding: 10px 20px !important;
   min-height: 40px !important;
   border-radius: 50px !important;
@@ -117,7 +109,7 @@
   border-radius: 50px !important;
   font-size: 0.9rem !important;
   font-weight: 600 !important;
-  font-family: 'Inter', sans-serif !important;
+  font-family: 'Sohne', sans-serif !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -215,33 +207,21 @@
   .header-container {
     padding: 1rem 1.5rem;
   }
-  
+
   .logo-icon {
     font-size: 1.5rem;
   }
-  
+
   .logo-text {
     font-size: 1.5rem;
   }
-  
+
   .header-nav {
     gap: 1rem;
   }
-  
+
   .nav-link {
     font-size: 0.9rem;
     padding: 0.4rem 0.8rem;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-

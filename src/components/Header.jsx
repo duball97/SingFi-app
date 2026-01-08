@@ -19,14 +19,14 @@ export default function Header() {
         </Link>
         <nav className="header-nav">
           <Link to="/" className="nav-link">Home</Link>
-          {loading && user ? (
-            <div className="nav-link" style={{ opacity: 0.5 }}>Loading...</div>
+          {loading ? (
+            <div className="nav-link" style={{ opacity: 0.7 }}>Loading...</div>
           ) : user ? (
             <div className="user-menu">
               <Link to="/profile" className="user-info">
                 {userProfile?.avatar_url ? (
-                  <img 
-                    src={userProfile.avatar_url} 
+                  <img
+                    src={userProfile.avatar_url}
                     alt={userProfile.display_name || user.email}
                     className="user-avatar"
                   />

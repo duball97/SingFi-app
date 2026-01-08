@@ -1,5 +1,52 @@
+@import "tailwindcss";
+
+/* Sohne Font Faces */
+@font-face {
+  font-family: 'Sohne';
+  src: url('/sohne/TestSohne-Buch-BF663d89cd32e6a.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Sohne';
+  src: url('/sohne/TestSohne-Kraftig-BF663d89cd37e26.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Sohne';
+  src: url('/sohne/TestSohne-Halbfett-BF663d89cd2d67b.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Sohne';
+  src: url('/sohne/TestSohne-Dreiviertelfett-BF663d89ccc5f66.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Sohne';
+  src: url('/sohne/TestSohne-Fett-BF663d89cca89ff.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Sohne';
+  src: url('/sohne/TestSohne-Extrafett-BF663d89cc9f2c0.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+
+
 :root {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Sohne', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   line-height: 1.5;
@@ -13,6 +60,18 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Sohne', sans-serif;
+  font-weight: 800;
+  /* Make titles bolder by default */
+  letter-spacing: -0.02em;
 }
 
 * {
@@ -70,7 +129,7 @@ button:focus,
 button:focus-visible {
   outline: 2px solid #ff6b35;
   outline-offset: 2px;
-  }
+}
 
 input {
   font-family: inherit;

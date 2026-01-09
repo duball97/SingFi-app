@@ -152,11 +152,13 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
   const userPitchY = useMemo(() => {
     const pitchToUse = userPitch || lastPitchRef.current;
     if (!pitchToUse || pitchToUse <= 0) {
-      console.log('No pitch detected. userPitch:', userPitch, 'lastPitch:', lastPitchRef.current);
       return null;
     }
     const yPos = pitchToPosition(pitchToUse);
-    console.log('Pitch:', pitchToUse.toFixed(1), 'Hz -> Y:', yPos.toFixed(1), 'px');
+    // Diagnostic log once in a while
+    if (Math.random() < 0.02) {
+      console.log('Visualizing Pitch:', pitchToUse.toFixed(1), 'Hz at Y:', yPos.toFixed(1), 'px');
+    }
     return yPos;
   }, [userPitch]);
 
@@ -168,7 +170,9 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
 
   // Smooth animation loop using requestAnimationFrame - tracks partial fills
   useEffect(() => {
-    if (!userPitch || !currentTime) {
+    // DON'T stop the animation loop if userPitch is null
+    // We need it to keep running as long as currentTime exists to show the time cursor
+    if (!currentTime) {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;

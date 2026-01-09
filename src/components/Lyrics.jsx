@@ -4,25 +4,25 @@ export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
   const lastIdxRef = useRef(-1);
   const [displayedIdx, setDisplayedIdx] = useState(-1);
   const segmentsLoggedRef = useRef(false);
-  
+
   // Filter segments to only include those after first verse starts
   const filteredSegments = useMemo(() => {
     if (!segments?.length) return [];
-    
+
     if (firstVerseStartTime !== null && firstVerseStartTime !== undefined) {
       return segments.filter(seg => {
         const start = Number(seg.start) || 0;
         return start >= firstVerseStartTime;
       });
     }
-    
+
     return segments;
   }, [segments, firstVerseStartTime]);
-  
+
   // Log all segments once when they're loaded
   useEffect(() => {
     if (filteredSegments?.length && !segmentsLoggedRef.current) {
-      console.log('🎵 FILTERED SEGMENTS WITH TIMES (after first verse):');
+      console.log('FILTERED SEGMENTS WITH TIMES (after first verse):');
       filteredSegments.forEach((seg, idx) => {
         const start = Number(seg.start) || 0;
         const end = Number(seg.end) || 0;
@@ -31,7 +31,7 @@ export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
       segmentsLoggedRef.current = true;
     }
   }, [filteredSegments]);
-  
+
   // Only calculate the INDEX, not the full objects
   const currentIdx = useMemo(() => {
     if (!filteredSegments?.length || currentTime === undefined || currentTime === null) {
@@ -43,7 +43,7 @@ export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
       const seg = filteredSegments[i];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
-      
+
       if (currentTime >= start && currentTime <= end) {
         return i;
       }
@@ -66,8 +66,8 @@ export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
       const seg = segments[currentIdx];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
-      console.log(`✅ SEGMENT CHANGE: Time ${currentTime.toFixed(2)}s → Segment [${currentIdx}] (${start.toFixed(2)}s - ${end.toFixed(2)}s): "${seg.text}"`);
-      
+      console.log(`SEGMENT CHANGE: Time ${currentTime.toFixed(2)}s → Segment [${currentIdx}] (${start.toFixed(2)}s - ${end.toFixed(2)}s): "${seg.text}"`);
+
       lastIdxRef.current = currentIdx;
       setDisplayedIdx(currentIdx);
     }
@@ -85,21 +85,21 @@ export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
   return (
     <div className="lyrics-container">
       {previous && (
-        <div 
+        <div
           key={`previous-${displayedIdx - 1}`}
           className="lyric-line previous"
         >
           {previous.text || ''}
         </div>
       )}
-      <div 
+      <div
         key={`current-${displayedIdx}`}
         className="lyric-line current"
       >
         {current.text || ''}
       </div>
       {next && (
-        <div 
+        <div
           key={`next-${displayedIdx + 1}`}
           className="lyric-line next"
         >

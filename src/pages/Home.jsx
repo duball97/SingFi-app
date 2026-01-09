@@ -110,10 +110,10 @@ export default function Home() {
         {/* Top Grid Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
           {/* Left Column: Hero Text + Search Bar */}
-          <div className="flex flex-col gap-10 text-left lg:pl-12 lg:pt-10">
-            <div className="space-y-6">
+          <div className="flex flex-col gap-6 text-left lg:pl-12 lg:pt-10">
+            <div className="space-y-2">
               <h1
-                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight leading-[1.1] pb-2"
+                className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight leading-[1.1]"
               >
                 <span className="block whitespace-nowrap hero-gradient-text">SING ANY SONG</span>
                 <span className="block whitespace-nowrap hero-gradient-text">ANYTIME ANYWHERE</span>
@@ -125,11 +125,11 @@ export default function Home() {
             </div>
 
             {/* Search Box - Premium Ultra Design */}
-            <div className="max-w-lg w-full group">
-              <div className="flex items-center gap-6 bg-white/[0.07] backdrop-blur-3xl border border-white/10 rounded-full px-10 py-7 transition-all duration-500 group-focus-within:bg-white/[0.12] group-focus-within:border-orange-500/40 group-focus-within:ring-[12px] group-focus-within:ring-orange-500/[0.05] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] hover:border-white/25">
+            <div className="max-w-sm w-full group">
+              <div className="flex items-center gap-3 bg-white/[0.07] backdrop-blur-3xl border border-white/10 rounded-full px-5 py-2 transition-all duration-500 group-focus-within:bg-white/[0.12] group-focus-within:border-orange-500/40 group-focus-within:ring-[8px] group-focus-within:ring-orange-500/[0.05] shadow-[0_24px_48px_-12px_rgba(0,0,0,0.5)] hover:border-white/25">
                 <input
                   type="text"
-                  className="flex-1 bg-transparent border-none outline-none text-white placeholder-white/20 text-xl font-semibold tracking-tight"
+                  className="flex-1 bg-transparent border-none outline-none text-white placeholder-white/20 text-sm font-semibold tracking-tight"
                   placeholder="Search artist or song..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -139,7 +139,7 @@ export default function Home() {
                   onClick={handleSearch}
                   className="search-icon-button"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 </button>
               </div>
             </div>
@@ -193,9 +193,9 @@ export default function Home() {
             START PLAYING
           </h3>
 
-          {/* Cards Row - Left Aligned with Padding */}
-          <div className="flex flex-wrap gap-8 justify-start lg:pl-32">
-            {suggestedSongs.map(song => (
+          {/* Cards Row - Centered 4 Columns */}
+          <div className="flex flex-wrap gap-10 justify-center">
+            {suggestedSongs.slice(0, 4).map(song => (
               <div
                 key={song.id}
                 onClick={() => startSession(song.youtube_id, song.title, song.artist, song.cover_url)}

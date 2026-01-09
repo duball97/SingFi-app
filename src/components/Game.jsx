@@ -18,7 +18,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   const [isMicActive, setIsMicActive] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [bufferRetryCount, setBufferRetryCount] = useState(0);
-  
+
   // Custom timer refs
   const playbackStartTimeRef = useRef(null);
   const pauseOffsetRef = useRef(0);
@@ -26,7 +26,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   const animationFrameRef = useRef(null);
   const playerReadyRef = useRef(false);
   const tryPlayTimeoutRef = useRef(null);
-  
+
   // Audio refs for pitch detection
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
@@ -67,25 +67,25 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        await audioContextRef.current.close().catch(() => {});
+        await audioContextRef.current.close().catch(() => { });
       }
 
       // Request microphone - DISABLED filters that might suppress voice
       // autoGainControl can suppress voice if it thinks it's noise
       const audioConstraints = {
-        echoCancellation: true,      // Keep echo cancellation to prevent feedback
-        noiseSuppression: false,     // DISABLED - might filter out voice as noise!
-        autoGainControl: false,      // DISABLED - can suppress voice when it thinks it's too loud
-        // Chrome-specific constraints (will be ignored by other browsers)
+        echoCancellation: { ideal: true },
+        noiseSuppression: { ideal: false },
+        autoGainControl: { ideal: true }, // Re-enabled for better sensitivity on some mics
+        // Chrome-specific constraints
         ...(navigator.userAgent.includes('Chrome') && {
-          googEchoCancellation: true,
-          googNoiseSuppression: false, // DISABLED
-          googAutoGainControl: false,  // DISABLED - this was likely the culprit!
-          googHighpassFilter: false,   // DISABLED - might filter low frequencies in voice
-          googTypingNoiseDetection: false,
+          googEchoCancellation: { ideal: true },
+          googNoiseSuppression: { ideal: false },
+          googAutoGainControl: { ideal: true },
+          googHighpassFilter: { ideal: false },
+          googTypingNoiseDetection: { ideal: false },
         })
       };
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints
       });
@@ -104,11 +104,15 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
 
       setIsMicActive(true);
-      console.log('🎤 Microphone connected');
+      // Diagnostics
+      console.log('Microphone connected', {
+        sampleRate: audioContext.sampleRate,
+        state: audioContext.state,
+        fftSize: analyser.fftSize
+      });
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setIsMicActive(false);
-      // Don't throw - just log the error
     }
   }, []);
 
@@ -133,7 +137,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       dataArrayRef.current = null;
       setIsMicActive(false);
       setUserPitch(null);
-      console.log('🎤 Microphone disconnected');
+      console.log('Microphone disconnected');
     } catch (error) {
       console.error('Error stopping microphone:', error);
       setIsMicActive(false);
@@ -145,7 +149,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   const currentTimeRef = useRef(0);
   const scoreAccumulatorRef = useRef(0);
   const lastScoreUpdateRef = useRef(Date.now()); // Initialize to current time for immediate first update
-  
+
   // Update ref when currentTime changes
   useEffect(() => {
     currentTimeRef.current = currentTime;
@@ -175,7 +179,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   useEffect(() => {
     if (gameState === 'ended' && !sessionSavedRef.current) {
       sessionSavedRef.current = true;
-      
+
       // Flush any remaining accumulated score
       const finalScore = Math.min(score + scoreAccumulatorRef.current, 100000); // Cap at 100k
       if (scoreAccumulatorRef.current > 0) {
@@ -185,12 +189,12 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
       // Save game session if user is logged in
       if (user && videoId) {
-        const durationSeconds = gameStartTimeRef.current 
-          ? (Date.now() - gameStartTimeRef.current) / 1000 
+        const durationSeconds = gameStartTimeRef.current
+          ? (Date.now() - gameStartTimeRef.current) / 1000
           : null;
-        
-        const accuracy = notesTotalRef.current > 0 
-          ? (notesHitRef.current / notesTotalRef.current) * 100 
+
+        const accuracy = notesTotalRef.current > 0
+          ? (notesHitRef.current / notesTotalRef.current) * 100
           : null;
 
         fetch(`${API_BASE_URL}/game-session`, {
@@ -235,9 +239,13 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   // Pitch detection loop
   const detectPitch = useCallback(() => {
     try {
-      // DON'T stop detection on pause - keep detecting even when paused!
-      // Only stop if mic is inactive or audio context is closed
       if (!analyserRef.current || !dataArrayRef.current || !audioContextRef.current) {
+        return;
+      }
+
+      // Check if audio context is suspended (Chrome/Safary policy) and resume
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
         return;
       }
 
@@ -260,12 +268,12 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       }
       const rms = Math.sqrt(sumSquares / data.length);
       const volumeThreshold = 0.001; // LOWERED SIGNIFICANTLY - detect even very quiet sounds
-      
+
       // Update volume level for debug display (0-100%) - use better scaling
       // RMS typically ranges from 0 to ~0.1 for normal speech, so scale accordingly
       const volumePercent = Math.min(100, Math.max(0, (rms / 0.05) * 100)); // Scale based on typical RMS range
       setVolumeLevel(volumePercent);
-      
+
       // ALWAYS process pitch detection - don't stop on low volume!
       // Volume threshold is just for display, not for blocking detection
       // Only skip if there's literally no signal (RMS extremely low)
@@ -278,37 +286,37 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       // Improved autocorrelation with better pitch detection
       let maxCorrelation = 0;
       let maxPeriod = 0;
-      
+
       // Calculate valid period range for human voice - EXTENDED range (50Hz to 3000Hz)
       const minPeriod = Math.max(20, Math.floor(sampleRate / 3000)); // Max 3000Hz (extended from 2000Hz)
       const maxPeriodLimit = Math.min(Math.floor(bufferLength / 2), Math.floor(sampleRate / 50)); // Min 50Hz (extended from 80Hz)
-      
+
       // Use step size for faster computation while maintaining accuracy
       const step = Math.max(1, Math.floor((maxPeriodLimit - minPeriod) / 200));
-      
+
       for (let period = minPeriod; period < maxPeriodLimit; period += step) {
         let correlation = 0;
         const checkLength = Math.min(bufferLength - period, 4096); // Larger window for better accuracy
-        
+
         for (let i = 0; i < checkLength; i++) {
           correlation += Math.abs(data[i] * data[i + period]);
         }
-        
+
         // Normalize by length for fair comparison
         correlation /= checkLength;
-        
+
         if (correlation > maxCorrelation) {
           maxCorrelation = correlation;
           maxPeriod = period;
         }
       }
-      
+
       // Refine around the peak for better accuracy
       if (maxPeriod > 0) {
         const refineRange = 5;
         const startPeriod = Math.max(minPeriod, maxPeriod - refineRange);
         const endPeriod = Math.min(maxPeriodLimit, maxPeriod + refineRange);
-        
+
         for (let period = startPeriod; period < endPeriod; period++) {
           let correlation = 0;
           const checkLength = Math.min(bufferLength - period, 4096);
@@ -325,7 +333,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
       // LOWERED threshold and EXTENDED range to ALWAYS show user's voice
       let detectedFrequency = null;
-      
+
       // LOWERED correlation threshold even more to detect quiet singing
       if (maxPeriod > 0 && maxCorrelation > 0.02) { // Lowered from 0.05 to 0.02 to detect even quieter sounds
         const rawFrequency = sampleRate / maxPeriod;
@@ -342,42 +350,45 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
           }
           setUserPitch(frequency);
           detectedFrequency = frequency;
-          console.log('🎤 PITCH DETECTED:', frequency.toFixed(1), 'Hz, Volume:', volumePercent.toFixed(1), '%, RMS:', rms.toFixed(5), 'Correlation:', maxCorrelation.toFixed(4));
+          // Log only once per second to avoid flooding
+          if (Math.random() < 0.05) {
+            console.log('PITCH DETECTED:', frequency.toFixed(1), 'Hz, Volume:', volumePercent.toFixed(1), '%');
+          }
         } else {
           // Frequency outside extended range - still show it but clamp to display range
           if (rawFrequency > 0) {
             const clampedFreq = Math.max(50, Math.min(3000, rawFrequency));
             setUserPitch(clampedFreq);
             detectedFrequency = clampedFreq;
-            console.log('🎤 PITCH DETECTED (clamped):', clampedFreq.toFixed(1), 'Hz, Volume:', volumePercent.toFixed(1), '%');
+            console.log('PITCH DETECTED (clamped):', clampedFreq.toFixed(1), 'Hz, Volume:', volumePercent.toFixed(1), '%');
           }
         }
       } else {
         // Very low correlation - log for debugging
         if (volumePercent > 1 || rms > 0.001) {
           // If there's volume but no pitch, log it
-          console.log('⚠️ Volume detected (', volumePercent.toFixed(1), '%, RMS:', rms.toFixed(5), ') but no pitch (correlation:', maxCorrelation.toFixed(4), ')');
+          console.log('Volume detected (', volumePercent.toFixed(1), '%, RMS:', rms.toFixed(5), ') but no pitch (correlation:', maxCorrelation.toFixed(4), ')');
         }
         // Keep showing last pitch for smoother experience - don't clear it
       }
-      
+
       // Only award score if user is on target for an active note
       if (detectedFrequency && detectedFrequency > 0) {
         const currentTimeValue = currentTimeRef.current;
         if (notes && Array.isArray(notes) && notes.length > 0 && currentTimeValue) {
           // Find active note (note that contains currentTime)
-          const activeNote = notes.find(note => 
+          const activeNote = notes.find(note =>
             currentTimeValue >= note.start && currentTimeValue <= note.end
           );
-          
+
           if (activeNote) {
             // Calculate accuracy based on pitch difference with octave tolerance
             const tolerance = 300; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
-            
+
             // Check base pitch and octave variations
             let pitchDiff = Math.abs(detectedFrequency - activeNote.targetPitch);
             let isOnTarget = pitchDiff <= tolerance;
-            
+
             // Also check octave variations (singing an octave higher/lower)
             if (!isOnTarget && activeNote.targetPitch > 0) {
               const octaveUp = activeNote.targetPitch * 2;
@@ -389,7 +400,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                 pitchDiff = Math.min(diffUp, diffDown, pitchDiff);
               }
             }
-            
+
             // Award proportional points even when partially on target
             // Points scale from 0 (far off) to full (perfect match)
             // This ensures partial bar fills give proportional scores
@@ -405,7 +416,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                 accuracy = 0.5 * (1 - (pitchDiff - tolerance) / tolerance); // 50% max when just outside tolerance (increased from 30%)
               }
             }
-            
+
             if (accuracy > 0) {
               // Award points per second, scaled by accuracy
               // Max 100k total score, so calculate points based on song duration and note density
@@ -415,10 +426,10 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
               // Adjusted to ensure max score of ~100k for a typical song
               const basePointsPerSecond = 100; // Increased for better visibility
               const points = basePointsPerSecond * accuracy * timeWeight;
-              
+
               // Accumulate score to ensure partial fills are counted
               scoreAccumulatorRef.current += points;
-              
+
               // Update score state every ~50ms for more responsive updates
               const now = Date.now();
               if (now - lastScoreUpdateRef.current >= 50) {
@@ -490,14 +501,14 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
     const playerInstance = event.target;
     setPlayer(playerInstance);
     playerReadyRef.current = true;
-    
+
     try {
       const videoDuration = playerInstance.getDuration();
       if (videoDuration) {
         setDuration(videoDuration);
       }
-      console.log('▶️ Video ready, duration:', videoDuration);
-      
+      console.log('Video ready, duration:', videoDuration);
+
       // Start countdown
       setGameState('countdown');
     } catch (error) {
@@ -509,14 +520,14 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   // Countdown logic - only runs when countdown finishes
   useEffect(() => {
     if (gameState !== 'countdown') return;
-    
+
     if (countdown > 0) {
       const timer = setTimeout(() => {
         setCountdown(prev => prev - 1);
       }, 1000);
       return () => clearTimeout(timer);
     }
-    
+
     // Countdown finished - start the game!
     setGameState('playing');
     // Track game start time
@@ -524,19 +535,19 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       gameStartTimeRef.current = Date.now();
     }
     startMicrophone();
-    
+
     // Wait for player to be fully ready, then play
     // Track retry attempts to prevent infinite loops
     let retryCount = 0;
     const maxRetries = 30; // Max 30 retries (3 seconds total)
     let isCancelled = false;
-    
+
     const tryPlay = () => {
       // Check if cancelled (e.g., user paused)
       if (isCancelled) return;
-      
+
       retryCount++;
-      
+
       // Check if player exists and is ready
       if (!player || !playerReadyRef.current) {
         if (retryCount < maxRetries && !isCancelled) {
@@ -546,7 +557,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         }
         return;
       }
-      
+
       // Check if player has the necessary methods
       if (typeof player.playVideo !== 'function') {
         if (retryCount < maxRetries && !isCancelled) {
@@ -554,7 +565,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         }
         return;
       }
-      
+
       // Check if player has internal iframe (YouTube API requirement)
       // The error "Cannot read properties of null (reading 'src')" happens
       // when the iframe doesn't exist yet
@@ -566,7 +577,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         } catch (e) {
           // getIframe might not exist or might throw
         }
-        
+
         // If we can't get iframe, try to find it in the DOM
         if (!iframe) {
           const playerContainer = document.querySelector('.game-youtube-player');
@@ -574,7 +585,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
             iframe = playerContainer.querySelector('iframe');
           }
         }
-        
+
         // If still no iframe, wait a bit longer
         if (!iframe || !iframe.src) {
           if (retryCount < maxRetries && !isCancelled) {
@@ -584,7 +595,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
           }
           return;
         }
-        
+
         // Try to get player state - if it throws, player isn't ready
         let playerState = -1;
         try {
@@ -596,26 +607,26 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
           }
           return;
         }
-        
+
         // Add a small delay to ensure iframe is fully initialized
         // YouTube API sometimes needs a moment after iframe appears
         if (retryCount < 5 && !isCancelled) {
           tryPlayTimeoutRef.current = setTimeout(tryPlay, 100);
           return;
         }
-        
+
         // Check again if cancelled before attempting to play
         if (isCancelled) return;
-        
+
         // Player is ready, attempt to play
         player.playVideo();
-        console.log('▶️ Playing video, player state:', playerState);
+        console.log('Playing video, player state:', playerState);
       } catch (error) {
         // Only log error if we've tried a few times
         if (retryCount > 3) {
           console.error('Error playing video:', error);
         }
-        
+
         // Only retry if we haven't exceeded max retries and not cancelled
         if (retryCount < maxRetries && !isCancelled) {
           tryPlayTimeoutRef.current = setTimeout(tryPlay, 300);
@@ -624,10 +635,10 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         }
       }
     };
-    
+
     // Wait a bit before first attempt to let iframe initialize
     tryPlayTimeoutRef.current = setTimeout(tryPlay, 300);
-    
+
     // Cleanup: cancel tryPlay if component unmounts or effect re-runs
     return () => {
       isCancelled = true;
@@ -654,12 +665,12 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
           gameStartTimeRef.current = Date.now();
         }
       }
-      
+
       try {
         const ytTime = playerInstance.getCurrentTime();
         const videoDuration = playerInstance.getDuration();
         if (videoDuration) setDuration(videoDuration);
-        
+
         if (typeof ytTime === 'number' && !isNaN(ytTime) && ytTime >= 0) {
           playbackStartTimeRef.current = performance.now() - (ytTime * 1000);
           pauseOffsetRef.current = 0;
@@ -687,7 +698,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       if (gameState === 'playing') {
         setIsBuffering(true);
         setGameState('buffering');
-        console.log('⏳ Video buffering...');
+        console.log('Video buffering...');
       }
     }
 
@@ -699,29 +710,29 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
     }
 
     if (state === -1) { // UNSTARTED
-      console.log('⏸️ Video unstarted');
+      console.log('Video unstarted');
     }
 
     if (state === 5) { // CUED
-      console.log('✅ Video cued and ready');
+      console.log('Video cued and ready');
     }
   };
 
   const handleError = (event) => {
     const errorCode = event.data;
-    console.error('❌ YouTube player error:', errorCode);
-    
+    console.error('YouTube player error:', errorCode);
+
     // Error codes: https://developers.google.com/youtube/iframe_api_reference#Events
     // 2 = Invalid parameter value
     // 5 = HTML5 player error
     // 100 = Video not found
     // 101/150 = Video not allowed to be played in embedded players
-    
+
     if (errorCode === 5 || errorCode === 100 || errorCode === 101 || errorCode === 150) {
       // Network or playback errors - try to recover
       console.log('🔄 Attempting to recover from error...');
       setGameState('loading');
-      
+
       // Reload the video after a delay
       setTimeout(() => {
         if (player && player.loadVideoById) {
@@ -739,11 +750,11 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   useEffect(() => {
     let lastSyncTime = 0;
     const syncInterval = 2000; // Re-sync with YouTube every 2 seconds
-    
+
     const tick = () => {
       if (isPlayingRef.current && playbackStartTimeRef.current !== null) {
         const now = performance.now();
-        
+
         // Periodically re-sync with YouTube player to prevent drift
         if (player && now - lastSyncTime > syncInterval) {
           try {
@@ -752,10 +763,10 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
               // Calculate expected time from our timer
               const expectedTime = (now - playbackStartTimeRef.current) / 1000;
               const drift = Math.abs(expectedTime - ytTime);
-              
+
               // If drift is more than 0.3 seconds, re-sync
               if (drift > 0.3) {
-                console.log(`⏱️ [SYNC] Drift detected: ${drift.toFixed(2)}s. Re-syncing to YouTube time.`);
+                console.log(`[SYNC] Drift detected: ${drift.toFixed(2)}s. Re-syncing to YouTube time.`);
                 playbackStartTimeRef.current = now - (ytTime * 1000);
               }
             }
@@ -764,7 +775,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
           }
           lastSyncTime = now;
         }
-        
+
         const elapsed = (now - playbackStartTimeRef.current) / 1000;
         setCurrentTime(elapsed);
       }
@@ -782,13 +793,13 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
   const handlePlayPause = () => {
     if (!player || !playerReadyRef.current) return;
-    
+
     // Cancel any pending tryPlay timeouts
     if (tryPlayTimeoutRef.current) {
       clearTimeout(tryPlayTimeoutRef.current);
       tryPlayTimeoutRef.current = null;
     }
-    
+
     try {
       if (isPlaying) {
         player.pauseVideo();
@@ -816,7 +827,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
   const handlePauseResume = () => {
     if (!player) return;
-    
+
     if (isPlaying) {
       // Pause video and microphone
       player.pauseVideo();
@@ -830,16 +841,16 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
   const jumpToFirstVerse = () => {
     if (!player || firstVerseStartTime === null || firstVerseStartTime === undefined) return;
-    
+
     try {
       // Seek to first verse start time
       player.seekTo(firstVerseStartTime, true);
       console.log(`⏩ Jumped to first verse at ${firstVerseStartTime.toFixed(2)}s`);
-      
+
       // Update current time immediately
       setCurrentTime(firstVerseStartTime);
       currentTimeRef.current = firstVerseStartTime;
-      
+
       // Reset playback tracking to sync with new position
       if (isPlaying) {
         playbackStartTimeRef.current = performance.now() - (firstVerseStartTime * 1000);
@@ -847,7 +858,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       } else {
         pauseOffsetRef.current = firstVerseStartTime;
       }
-      
+
       // If not playing, start playing
       if (!isPlaying) {
         player.playVideo();
@@ -895,7 +906,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       {gameState === 'ended' && (
         <div className="countdown-overlay game-over">
           <div className="game-over-content">
-            <div className="game-over-title">🎤 Great Performance!</div>
+            <div className="game-over-title">Great Performance!</div>
             <div className="final-score">
               <span className="final-score-label">Final Score</span>
               <span className="final-score-value">{Math.floor(score)}</span>
@@ -922,7 +933,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         <div className="game-score-top-left">
           <button onClick={onBack} className="back-button" aria-label="Back">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
+              <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
           <div className="game-score-content">
@@ -933,7 +944,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
         {/* Pitch Bars in Center */}
         <div className="game-pitch-bars-container">
-          <PitchBars 
+          <PitchBars
             segments={segments}
             currentTime={currentTime}
             userPitch={userPitch}
@@ -944,8 +955,8 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
         {/* Lyrics at Bottom */}
         <div className="game-lyrics-container">
-          <Lyrics 
-            segments={segments} 
+          <Lyrics
+            segments={segments}
             currentTime={currentTime}
             firstVerseStartTime={firstVerseStartTime}
           />
@@ -955,20 +966,20 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         <div className="game-top-controls">
           {/* Jump to First Verse Button */}
           {firstVerseStartTime !== null && firstVerseStartTime !== undefined && (
-            <button 
+            <button
               onClick={jumpToFirstVerse}
               className="control-button jump-button"
               aria-label="Jump to beginning of song"
               title={`Jump to first verse (${firstVerseStartTime.toFixed(1)}s)`}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M13 18l8.5-6-8.5-6v12zm-.5-6l-8.5-6v12l8.5-6z"/>
+                <path d="M13 18l8.5-6-8.5-6v12zm-.5-6l-8.5-6v12l8.5-6z" />
               </svg>
             </button>
           )}
 
           {/* Play/Pause Button */}
-          <button 
+          <button
             onClick={handlePlayPause}
             className={`control-button ${isPlaying ? 'playing' : 'paused'}`}
             aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -986,19 +997,19 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
           </button>
 
           {/* Microphone Button */}
-          <button 
+          <button
             onClick={toggleMicrophone}
             className={`control-button mic-button ${isMicActive ? 'active' : ''}`}
             aria-label={isMicActive ? 'Mute Microphone' : 'Enable Microphone'}
           >
             {isMicActive ? (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
               </svg>
             ) : (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z" />
               </svg>
             )}
           </button>
@@ -1014,7 +1025,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         {/* Debug Voice Frequency Indicator - Bottom Left */}
         <div className="voice-frequency-debug">
           <div className="voice-debug-header">
-            <span className="voice-debug-icon">🎤</span>
+            <span className="voice-debug-icon"></span>
             <span className="voice-debug-title">Voice Detection</span>
           </div>
           <div className="voice-debug-content">
@@ -1041,7 +1052,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                   </span>
                 </div>
                 <div className="voice-debug-visual">
-                  <div 
+                  <div
                     className="voice-debug-bar voice-debug-volume-bar"
                     style={{
                       width: `${volumeLevel}%`,
@@ -1052,7 +1063,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                 {userPitch && (
                   <div className="voice-debug-visual">
                     <div className="voice-debug-label" style={{ fontSize: '0.7rem', marginBottom: '0.25rem' }}>Pitch:</div>
-                    <div 
+                    <div
                       className="voice-debug-bar voice-debug-pitch-bar"
                       style={{
                         width: `${Math.min(100, (userPitch / 1600) * 100)}%`,

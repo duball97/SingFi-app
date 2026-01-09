@@ -137,11 +137,11 @@ export const AuthProvider = ({ children }) => {
 
             if (insertError) {
               console.error('AuthContext: FATAL - Could not auto-create user:', insertError);
-              console.error('AuthContext: ⚠️ This suggests a Row Level Security (RLS) policy violation.');
+              console.error('AuthContext: This suggests a Row Level Security (RLS) policy violation.');
               // Fallback to local only so the app doesn't crash
               setUserProfile(newProfile);
             } else {
-              console.log('AuthContext: ✅ User profile auto-created successfully:', createdUser);
+              console.log('AuthContext: User profile auto-created successfully:', createdUser);
               setUserProfile(createdUser);
             }
           } else {

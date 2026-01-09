@@ -43,8 +43,6 @@
   font-style: normal;
 }
 
-
-
 :root {
   font-family: 'Sohne', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -62,70 +60,30 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: 'Sohne', sans-serif;
-  font-weight: 800;
-  /* Make titles bolder by default */
-  letter-spacing: -0.02em;
-}
-
 
 body {
-  margin: 0;
+
   min-width: 320px;
   min-height: 100vh;
   background: #000000;
   overflow-x: hidden;
 }
 
-button {
-  border-radius: 500px;
-  border: none;
-  padding: 16px 32px;
-  min-height: 48px;
-  font-size: 1rem;
-  font-weight: 700;
+/* Base heading style without aggressive weights/spacing */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: inherit;
-  background: #ff6b35;
-  color: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: none;
-  letter-spacing: 0;
-  min-width: 140px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.5;
+
 }
 
-button:hover:not(:disabled) {
-  transform: scale(1.05);
-  background: #ff7b45;
-}
-
-button:active:not(:disabled) {
-  transform: scale(1);
-  background: #ff6b35;
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-button:focus,
-button:focus-visible {
-  outline: 2px solid #ff6b35;
-  outline-offset: 2px;
-}
-
-input {
+/* Minimal input reset */
+input,
+button,
+select,
+textarea {
   font-family: inherit;
 }

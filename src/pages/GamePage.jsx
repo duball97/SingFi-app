@@ -51,7 +51,7 @@ export default function GamePage() {
     // Prevent double requests (React Strict Mode, double-click, etc.)
     const lockKey = `__songLoading_${videoId}`;
     if (window[lockKey]) {
-      console.log('⏳ Request already in progress, skipping duplicate...');
+      console.log('Request already in progress, skipping duplicate...');
       return;
     }
 
@@ -108,13 +108,13 @@ export default function GamePage() {
         setFirstVerseStartTime(data.firstVerseStartTime || null);
 
         if (data.cached) {
-          console.log('✅ Loaded from cache - instant!');
+          console.log('Loaded from cache - instant!');
         }
         if (data.notes) {
-          console.log('🎵 Real pitch notes loaded:', data.notes.length);
+          console.log('Real pitch notes loaded:', data.notes.length);
         }
         if (data.firstVerseStartTime) {
-          console.log('🎵 First verse starts at:', data.firstVerseStartTime, 'seconds');
+          console.log('First verse starts at:', data.firstVerseStartTime, 'seconds');
         }
       } catch (err) {
         setError(err.message);
@@ -153,7 +153,7 @@ export default function GamePage() {
 
           {/* Content */}
           <div className="loading-content">
-            <h2>🎤 Processing Song...</h2>
+            <h2>Processing Song...</h2>
             <div className="loading-message">
               <span className="loading-dots">
                 <span></span>

@@ -11,13 +11,13 @@ export default function LoadingSongPage() {
   const navigate = useNavigate();
   const videoId = searchParams.get('id');
   const { addLoadingSong, updateSongStatus, loadingSongs } = useSongLoading();
-  
+
   const [randomSongs, setRandomSongs] = useState([]);
   const [loadingRandom, setLoadingRandom] = useState(true);
 
   const title = decodeURIComponent(urlTitle || 'Unknown');
   const artist = decodeURIComponent(channel || 'Unknown');
-  
+
   // Check if current song is ready
   const currentSongStatus = videoId ? loadingSongs[videoId]?.status : null;
   const isSongReady = currentSongStatus === 'completed';
@@ -70,14 +70,14 @@ export default function LoadingSongPage() {
       try {
         setLoadingRandom(true);
         const response = await fetch(`${API_BASE_URL}/songs?limit=100`);
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch songs');
         }
-        
+
         const data = await response.json();
         const songs = data.songs || [];
-        
+
         // Shuffle and pick 3 random songs
         const shuffled = [...songs].sort(() => Math.random() - 0.5);
         setRandomSongs(shuffled.slice(0, 3));
@@ -94,12 +94,12 @@ export default function LoadingSongPage() {
   const handleSelectSong = async (song) => {
     const titleEncoded = encodeURIComponent(song.title || 'Unknown');
     const channelEncoded = encodeURIComponent(song.channel || 'Unknown');
-    
+
     // Check if song exists in database (should always be true for random songs, but check to be safe)
     try {
       const response = await fetch(`${API_BASE_URL}/getSong?youtubeId=${song.id}`);
       const data = await response.json();
-      
+
       if (data.cached) {
         // Song exists, navigate directly to game (will load instantly)
         navigate(`/game/${channelEncoded}/${titleEncoded}?id=${song.id}`);
@@ -128,11 +128,11 @@ export default function LoadingSongPage() {
   return (
     <div className="loading-song-page">
       <div className="loading-song-content">
-        <h2>🎤 Loading your song</h2>
+        <h2>Loading your song</h2>
         <p className="loading-song-message">
           This will take a few minutes. Would you like to play another song instead while it loads?
         </p>
-        
+
         <div className="loading-song-info">
           <div className="song-title">{title}</div>
           {artist !== 'Unknown' && (
@@ -150,7 +150,7 @@ export default function LoadingSongPage() {
               </div>
             </div>
             <button onClick={handlePlayReadySong} className="play-ready-button">
-              ▶ Play Now
+              Play Now
             </button>
           </div>
         )}

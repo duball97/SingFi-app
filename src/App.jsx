@@ -23,6 +23,7 @@ function App() {
           <main className="app-main-content">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/game" element={<GamePage />} />
               <Route path="/game/:channel/:title" element={<GamePage />} />
               <Route path="/loading-song/:channel/:title" element={<LoadingSongPage />} />
               <Route path="/login" element={<Login />} />

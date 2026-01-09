@@ -10,7 +10,7 @@ export default function SongErrorPage() {
   const [searching, setSearching] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   // Get song info from location state or URL params
   const songTitle = location.state?.title || new URLSearchParams(location.search).get('title') || 'this song';
   const artist = location.state?.artist || new URLSearchParams(location.search).get('artist') || '';
@@ -25,7 +25,7 @@ export default function SongErrorPage() {
 
     try {
       const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&page=${page}`);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errorData.error || `Search failed: ${response.status} ${response.statusText}`);
@@ -44,12 +44,12 @@ export default function SongErrorPage() {
   const handleSelectSong = async (video) => {
     const title = encodeURIComponent(video.title || 'Unknown');
     const channel = encodeURIComponent(video.channel || 'Unknown');
-    
+
     // Check if song exists in database
     try {
       const response = await fetch(`${API_BASE_URL}/getSong?youtubeId=${video.id}`);
       const data = await response.json();
-      
+
       if (data.cached) {
         navigate(`/game/${channel}/${title}?id=${video.id}`);
       } else {
@@ -64,7 +64,7 @@ export default function SongErrorPage() {
   return (
     <div className="song-error-container">
       <div className="song-error-card">
-        <div className="error-icon">🎤</div>
+        <div className="error-icon"></div>
         <h1 className="error-title">Unable to Process This Song</h1>
         <p className="error-message">
           We couldn't extract the lyrics from <strong>{songTitle}</strong>

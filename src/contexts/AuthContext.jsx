@@ -48,16 +48,17 @@ export const AuthProvider = ({ children }) => {
         console.log('AuthContext: Session retrieved:', session?.user ? session.user.id : 'No user');
         setUser(session?.user ?? null);
 
+        // Set loading false IMMEDIATELY after we have session info
+        // This prevents the "Loading..." from showing forever
+        setLoading(false);
+
         if (session?.user) {
-          // Fetch fresh data in background
-          await fetchUserProfile(session.user.id);
+          // Fetch fresh data in background (non-blocking for UI)
+          fetchUserProfile(session.user.id);
         } else {
-          // If no user/session, clear cache and stop loading
-          if (!session?.user) {
-            localStorage.removeItem('singfi_user_profile');
-            setUserProfile(null);
-          }
-          setLoading(false);
+          // If no user/session, clear cache
+          localStorage.removeItem('singfi_user_profile');
+          setUserProfile(null);
         }
       } catch (error) {
         console.error('AuthContext: Unexpected error in initAuth:', error);
@@ -76,15 +77,15 @@ export const AuthProvider = ({ children }) => {
 
       setUser(session?.user ?? null);
 
+      // ALWAYS set loading false immediately to prevent UI freeze
+      setLoading(false);
+
       if (session?.user) {
-        // Optimistic: If we have a session, we might have a profile in memory or cache
-        if (!userProfile || userProfile.id !== session.user.id) {
-          await fetchUserProfile(session.user.id);
-        }
+        // Fetch profile in background (non-blocking)
+        fetchUserProfile(session.user.id);
       } else {
         localStorage.removeItem('singfi_user_profile');
         setUserProfile(null);
-        setLoading(false);
       }
     });
 

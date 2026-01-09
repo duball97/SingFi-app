@@ -1,4 +1,25 @@
-/* 
-  Temporarily disabling custom CSS to ensure Tailwind classes take precedence.
-  This fixes the "stuck to edge" issue by removing potentially conflicting max-widths or grid layouts.
-*/
+.hero-gradient-text {
+  background: linear-gradient(180deg, #FFD84A 15%, #FF9A1F 40%, #FF4A00 70%, #E60000 90%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  width: fit-content;
+}
+
+.search-icon-button {
+  min-width: 0 !important;
+  padding: 8px !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.3s ease !important;
+  min-height: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  position: static !important;
+}
+
+.search-icon-button:hover {
+  color: #ff6b35 !important;
+  transform: scale(1.25) !important;
+}

@@ -22,7 +22,7 @@ export default function SongLoadingIndicator() {
 
   const handleSongClick = (youtubeId, title, artist) => {
     if (!youtubeId) return;
-    
+
     const titleEncoded = encodeURIComponent(title || 'Unknown');
     const artistEncoded = encodeURIComponent(artist || 'Unknown');
     navigate(`/game/${artistEncoded}/${titleEncoded}?id=${youtubeId}`);
@@ -38,7 +38,7 @@ export default function SongLoadingIndicator() {
           onClick={status === 'completed' ? () => handleSongClick(youtubeId, title, artist) : undefined}
         >
           <div className="loading-song-icon">
-            {status === 'completed' ? '✓' : '⏳'}
+            {status === 'completed' ? 'Check' : '...'}
           </div>
           <div className="loading-song-text">
             {title || 'Loading song...'}

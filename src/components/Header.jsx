@@ -19,9 +19,7 @@ export default function Header() {
         </Link>
         <nav className="header-nav">
           <Link to="/" className="nav-link">Home</Link>
-          {loading ? (
-            <div className="nav-link" style={{ opacity: 0.7 }}>Loading...</div>
-          ) : user ? (
+          {user ? (
             <div className="user-menu">
               <Link to="/profile" className="user-info">
                 {userProfile?.avatar_url ? (
@@ -36,17 +34,14 @@ export default function Header() {
                   </div>
                 )}
                 <span className="user-name">
-                  {userProfile?.display_name || user.email?.split('@')[0] || 'User'}
+                  {userProfile?.display_name || user.email?.split('@')[0] || 'Profile'}
                 </span>
               </Link>
-              <button onClick={handleSignOut} className="nav-link logout-button">
-                Sign Out
-              </button>
             </div>
           ) : (
             <>
-              <Link to="/login" className="nav-link" style={{ visibility: 'visible', opacity: 1 }}>Sign In</Link>
-              <Link to="/signup" className="nav-link signup-button" style={{ visibility: 'visible', opacity: 1 }}>Sign Up</Link>
+              <Link to="/login" className="nav-link">Sign In</Link>
+              <Link to="/signup" className="nav-link signup-button">Sign Up</Link>
             </>
           )}
         </nav>

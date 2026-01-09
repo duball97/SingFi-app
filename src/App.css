@@ -44,7 +44,7 @@
 }
 
 
-.app > * {
+.app>* {
   position: relative;
   z-index: 1;
 }
@@ -267,7 +267,8 @@
 .suggested-thumbnail-wrapper {
   position: relative;
   width: 100%;
-  padding-top: 56.25%; /* 16:9 aspect ratio */
+  padding-top: 56.25%;
+  /* 16:9 aspect ratio */
   overflow: hidden;
   background: rgba(0, 0, 0, 0.3);
 }
@@ -457,14 +458,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: 
-    repeating-linear-gradient(
-      0deg,
+  background:
+    repeating-linear-gradient(0deg,
       transparent,
       transparent 2px,
       rgba(255, 107, 53, 0.03) 2px,
-      rgba(255, 107, 53, 0.03) 4px
-    );
+      rgba(255, 107, 53, 0.03) 4px);
   pointer-events: none;
 }
 
@@ -486,14 +485,14 @@
   font-size: 2rem;
   font-weight: 800;
   color: #ff6b35;
-  text-shadow: 
+  text-shadow:
     0 0 20px rgba(255, 107, 53, 0.8),
     0 4px 12px rgba(0, 0, 0, 0.8);
   transform: scale(1.05);
   background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(247, 147, 30, 0.05) 100%);
   border-radius: 12px;
   border: 2px solid rgba(255, 107, 53, 0.3);
-  box-shadow: 
+  box-shadow:
     0 4px 20px rgba(255, 107, 53, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -532,9 +531,12 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.9;
   }
@@ -580,7 +582,7 @@
   border-top: 2px solid rgba(255, 107, 53, 0.2);
 }
 
-.pitch-info > div {
+.pitch-info>div {
   padding: 0.75rem;
   background: rgba(255, 107, 53, 0.05);
   border-radius: 8px;
@@ -593,38 +595,38 @@
   .game-section {
     grid-template-columns: 1fr;
   }
-  
+
   .results-list {
     grid-template-columns: 1fr;
   }
-  
+
   .game-lyrics-container .lyric-line {
     font-size: 1.1rem;
     max-width: 92%;
   }
-  
+
   .game-lyrics-container .lyric-line.current {
     font-size: 1.7rem;
     padding: 0.7rem 1.4rem;
   }
-  
+
   .game-lyrics-container .lyric-line.next {
     font-size: 1.2rem;
   }
-  
+
   .game-lyrics-container .lyric-line.previous {
     font-size: 0.85rem;
   }
-  
+
   .game-lyrics-container .lyric-line.next-next {
     font-size: 1.1rem;
   }
-  
+
   .game-pitch-bars-container {
     top: 28vh;
     height: 180px;
   }
-  
+
   .game-lyrics-container {
     top: calc(58vh - 20px);
   }
@@ -634,34 +636,34 @@
   .app-header h1 {
     font-size: 2.5rem;
   }
-  
+
   .search-container {
     flex-direction: column;
   }
-  
+
   .result-item {
     flex-direction: column;
   }
-  
+
   .result-thumbnail {
     width: 100%;
     height: 200px;
   }
-  
+
   .lyric-line.active {
     font-size: 1.5rem;
   }
-  
+
   .game-lyrics-container {
     top: calc(55vh - 20px);
     padding: 1.5rem 1rem;
   }
-  
+
   .game-pitch-bars-container {
     top: 25vh;
     height: 150px;
   }
-  
+
   .game-lyrics-container .lyric-line {
     font-size: 0.95rem;
     padding: 0.25rem 0.75rem;
@@ -669,25 +671,25 @@
     word-wrap: break-word;
     max-width: 95%;
   }
-  
+
   .game-lyrics-container .lyric-line.previous {
     font-size: 0.75rem;
   }
-  
+
   .game-lyrics-container .lyric-line.current {
     font-size: 1.5rem;
     padding: 0.6rem 1rem;
     line-height: 1.3;
   }
-  
+
   .game-lyrics-container .lyric-line.next {
     font-size: 1rem;
   }
-  
+
   .game-lyrics-container .lyric-line.next-next {
     font-size: 1rem;
   }
-  
+
 }
 
 /* Game Page Styles */
@@ -711,7 +713,7 @@
   overflow: hidden;
 }
 
-.game-video-background > div {
+.game-video-background>div {
   width: 100% !important;
   height: 100% !important;
   padding-bottom: 0 !important;
@@ -783,10 +785,12 @@
     transform: scale(0.5);
     opacity: 0;
   }
+
   50% {
     transform: scale(1.2);
     opacity: 1;
   }
+
   100% {
     transform: scale(1);
     opacity: 1;
@@ -825,9 +829,12 @@
 }
 
 @keyframes shimmer {
-  0%, 100% {
+
+  0%,
+  100% {
     filter: brightness(1);
   }
+
   50% {
     filter: brightness(1.2);
   }
@@ -888,13 +895,16 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Game Top Bar - Only time display now */
 .game-top-bar {
   position: fixed;
-  top: calc(5rem + 10px); /* Position below header (header is ~80px tall) + 10px */
+  top: calc(5rem + 10px);
+  /* Position below header (header is ~80px tall) + 10px */
   left: 0;
   right: 0;
   z-index: 100;
@@ -934,7 +944,8 @@
 /* Score - Top Left with Back Button */
 .game-score-top-left {
   position: fixed;
-  top: calc(6rem + 10px); /* Position below header (header is ~80px tall) + 10px */
+  top: calc(6rem + 10px);
+  /* Position below header (header is ~80px tall) + 10px */
   left: 2rem;
   z-index: 100;
   display: flex;
@@ -1015,7 +1026,8 @@
 /* Top Controls - Top Right */
 .game-top-controls {
   position: fixed;
-  top: calc(6rem + 10px); /* Position below header (header is ~80px tall) + 10px */
+  top: calc(6rem + 10px);
+  /* Position below header (header is ~80px tall) + 10px */
   right: 2rem;
   z-index: 100;
   display: flex;
@@ -1098,9 +1110,12 @@
 }
 
 @keyframes mic-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.9;
   }
@@ -1176,8 +1191,15 @@
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .voice-debug-text {
@@ -1261,10 +1283,12 @@
 /* Stop Button - CENTERED, HUGE, IMPOSSIBLE TO MISS */
 .game-stop-button-center {
   position: fixed !important;
-  top: calc(50% + 100px) !important; /* 100px down from center */
+  top: calc(50% + 100px) !important;
+  /* 100px down from center */
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
-  z-index: 99999 !important; /* Above EVERYTHING */
+  z-index: 99999 !important;
+  /* Above EVERYTHING */
   display: flex !important;
   align-items: center;
   justify-content: center;
@@ -1272,7 +1296,8 @@
   height: 60px !important;
   padding: 0 !important;
   backdrop-filter: blur(20px);
-  border-radius: 50% !important; /* Perfect circle */
+  border-radius: 50% !important;
+  /* Perfect circle */
   color: white !important;
   cursor: pointer;
   transition: all 0.3s;
@@ -1282,8 +1307,8 @@
   /* Default: PAUSE state (red) */
   background: #dc3545 !important;
   border: 3px solid #ff0000 !important;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.9), 
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.9),
     0 0 40px rgba(220, 53, 69, 1),
     inset 0 2px 8px rgba(255, 255, 255, 0.3);
 }
@@ -1292,16 +1317,16 @@
 .game-stop-button-center.resume-state {
   background: #ff6b35 !important;
   border: 4px solid #ffd700 !important;
-  box-shadow: 
-    0 12px 48px rgba(0, 0, 0, 0.9), 
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.9),
     0 0 50px rgba(255, 107, 53, 1),
     inset 0 2px 8px rgba(255, 255, 255, 0.3);
 }
 
 .game-stop-button-center:hover {
   transform: translate(-50%, -50%) scale(1.15) !important;
-  box-shadow: 
-    0 12px 48px rgba(0, 0, 0, 1), 
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 1),
     0 0 50px currentColor;
 }
 
@@ -1339,8 +1364,8 @@
   font-weight: 900;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.8), 
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.8),
     0 0 30px rgba(220, 53, 69, 0.8),
     inset 0 2px 4px rgba(255, 255, 255, 0.2);
   text-transform: uppercase;
@@ -1354,8 +1379,8 @@
   background: rgba(220, 53, 69, 1);
   border-color: #dc3545;
   transform: scale(1.05);
-  box-shadow: 
-    0 10px 40px rgba(0, 0, 0, 0.7), 
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.7),
     0 0 30px rgba(220, 53, 69, 0.6);
 }
 
@@ -1434,7 +1459,7 @@
   font-weight: 900;
   opacity: 1;
   color: #ffffff;
-  text-shadow: 
+  text-shadow:
     0 0 30px rgba(255, 107, 53, 0.8),
     0 0 60px rgba(255, 107, 53, 0.5),
     0 4px 20px rgba(0, 0, 0, 1),
@@ -1442,15 +1467,13 @@
   transform: scale(1);
   letter-spacing: 1px;
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 107, 53, 0.15) 0%,
-    rgba(255, 215, 0, 0.1) 50%,
-    rgba(255, 107, 53, 0.15) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 107, 53, 0.15) 0%,
+      rgba(255, 215, 0, 0.1) 50%,
+      rgba(255, 107, 53, 0.15) 100%);
   border-radius: 16px;
   border: 2px solid rgba(255, 107, 53, 0.4);
-  box-shadow: 
+  box-shadow:
     0 0 40px rgba(255, 107, 53, 0.4),
     inset 0 0 20px rgba(255, 255, 255, 0.1);
   animation: lyric-pulse 2s ease-in-out infinite;
@@ -1462,13 +1485,16 @@
 }
 
 @keyframes lyric-pulse {
-  0%, 100% {
-    box-shadow: 
+
+  0%,
+  100% {
+    box-shadow:
       0 0 40px rgba(255, 107, 53, 0.4),
       inset 0 0 20px rgba(255, 255, 255, 0.1);
   }
+
   50% {
-    box-shadow: 
+    box-shadow:
       0 0 60px rgba(255, 107, 53, 0.6),
       inset 0 0 30px rgba(255, 255, 255, 0.15);
   }
@@ -1512,7 +1538,8 @@
   width: 100%;
   height: 100%;
   position: relative;
-  transform: translateZ(0); /* Force GPU acceleration */
+  transform: translateZ(0);
+  /* Force GPU acceleration */
   will-change: contents;
   visibility: visible !important;
   opacity: 1 !important;
@@ -1525,7 +1552,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  transform: translateZ(0); /* Force GPU acceleration */
+  transform: translateZ(0);
+  /* Force GPU acceleration */
   visibility: visible !important;
   opacity: 1 !important;
 }
@@ -1536,16 +1564,19 @@
 }
 
 @keyframes center-line-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.9;
-    box-shadow: 
+    box-shadow:
       0 0 15px rgba(255, 107, 53, 1),
       0 0 30px rgba(255, 107, 53, 0.8),
       0 0 45px rgba(255, 107, 53, 0.5);
   }
+
   50% {
     opacity: 1;
-    box-shadow: 
+    box-shadow:
       0 0 20px rgba(255, 107, 53, 1),
       0 0 40px rgba(255, 107, 53, 1),
       0 0 60px rgba(255, 107, 53, 0.7);
@@ -1571,7 +1602,7 @@
 .pitch-bar-empty.active {
   border-color: rgba(255, 215, 0, 0.8);
   background: rgba(255, 215, 0, 0.15);
-  box-shadow: 
+  box-shadow:
     0 0 10px rgba(255, 215, 0, 0.4),
     0 0 20px rgba(255, 215, 0, 0.2);
 }
@@ -1582,10 +1613,10 @@
   left: 0;
   top: 0;
   border-radius: 13px;
-  background: linear-gradient(90deg, 
-    rgba(255, 107, 53, 1) 0%, 
-    rgba(255, 140, 60, 0.95) 100%);
-  box-shadow: 
+  background: linear-gradient(90deg,
+      rgba(255, 107, 53, 1) 0%,
+      rgba(255, 140, 60, 0.95) 100%);
+  box-shadow:
     0 0 8px rgba(255, 107, 53, 0.9),
     0 0 16px rgba(255, 107, 53, 0.6);
   z-index: 3;
@@ -1596,20 +1627,20 @@
 
 /* On target - orange fill (filled segments) */
 .pitch-bar-fill.on-target {
-  background: linear-gradient(90deg, 
-    rgba(255, 107, 53, 1) 0%, 
-    rgba(255, 140, 60, 0.95) 100%);
-  box-shadow: 
+  background: linear-gradient(90deg,
+      rgba(255, 107, 53, 1) 0%,
+      rgba(255, 140, 60, 0.95) 100%);
+  box-shadow:
     0 0 8px rgba(255, 107, 53, 0.9),
     0 0 16px rgba(255, 107, 53, 0.6);
 }
 
 /* Real-time fill indicator - shows current position when on target */
 .pitch-bar-fill.realtime {
-  background: linear-gradient(90deg, 
-    rgba(255, 107, 53, 1) 0%, 
-    rgba(255, 140, 60, 0.95) 100%);
-  box-shadow: 
+  background: linear-gradient(90deg,
+      rgba(255, 107, 53, 1) 0%,
+      rgba(255, 140, 60, 0.95) 100%);
+  box-shadow:
     0 0 8px rgba(255, 107, 53, 0.9),
     0 0 16px rgba(255, 107, 53, 0.6);
   z-index: 4;
@@ -1619,11 +1650,11 @@
 
 /* Fill bars at user's actual pitch position - appears where they sing! */
 .pitch-bar-fill.user-pitch-fill {
-  background: linear-gradient(90deg, 
-    rgba(255, 107, 53, 1) 0%, 
-    rgba(255, 140, 60, 0.95) 100%);
+  background: linear-gradient(90deg,
+      rgba(255, 107, 53, 1) 0%,
+      rgba(255, 140, 60, 0.95) 100%);
   border-radius: 10px;
-  box-shadow: 
+  box-shadow:
     0 0 10px rgba(255, 107, 53, 0.9),
     0 0 20px rgba(255, 107, 53, 0.6),
     inset 0 2px 4px rgba(255, 255, 255, 0.2);
@@ -1641,12 +1672,11 @@
   width: 100%;
   height: 3px;
   background: linear-gradient(90deg,
-    transparent 0%,
-    rgba(255, 107, 53, 0.9) 10%,
-    rgba(255, 107, 53, 1) 50%,
-    rgba(255, 107, 53, 0.9) 90%,
-    transparent 100%
-  );
+      transparent 0%,
+      rgba(255, 107, 53, 0.9) 10%,
+      rgba(255, 107, 53, 1) 50%,
+      rgba(255, 107, 53, 0.9) 90%,
+      transparent 100%);
   /* REMOVED white borders - no white line! */
   transform: translateY(-50%);
   z-index: 25;
@@ -1660,7 +1690,9 @@
 }
 
 @keyframes voice-line-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.95;
     box-shadow:
       0 0 15px rgba(255, 215, 0, 1),
@@ -1668,6 +1700,7 @@
       0 0 45px rgba(255, 215, 0, 0.6),
       0 0 60px rgba(255, 215, 0, 0.4);
   }
+
   50% {
     opacity: 1;
     box-shadow:
@@ -1700,7 +1733,9 @@
 }
 
 @keyframes voice-dot-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translate(-50%, -50%) scale(1);
     border-color: rgba(255, 255, 255, 1);
     box-shadow:
@@ -1710,6 +1745,7 @@
       0 0 80px rgba(255, 215, 0, 0.5),
       inset 0 0 12px rgba(255, 255, 255, 0.8);
   }
+
   50% {
     transform: translate(-50%, -50%) scale(1.3);
     border-color: rgba(255, 255, 255, 1);
@@ -1728,14 +1764,13 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(180deg, 
-    rgba(255, 215, 0, 0.8) 0%,
-    rgba(255, 255, 255, 1) 50%,
-    rgba(255, 215, 0, 0.8) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 215, 0, 0.8) 0%,
+      rgba(255, 255, 255, 1) 50%,
+      rgba(255, 215, 0, 0.8) 100%);
   transform: translateX(-50%);
   will-change: left;
-  box-shadow: 
+  box-shadow:
     0 0 10px rgba(255, 215, 0, 0.8),
     0 0 20px rgba(255, 215, 0, 0.5);
   transform: translateX(-50%);
@@ -1768,7 +1803,7 @@
   border-radius: 50%;
   background: #ff6b35;
   border: 4px solid white;
-  box-shadow: 
+  box-shadow:
     0 0 20px rgba(255, 107, 53, 1),
     0 0 40px rgba(255, 107, 53, 0.8),
     0 0 60px rgba(255, 107, 53, 0.6);
@@ -1780,7 +1815,7 @@
 .user-pitch-indicator.on-target .user-pitch-dot {
   background: #4ade80;
   border-color: #22c55e;
-  box-shadow: 
+  box-shadow:
     0 0 20px rgba(74, 222, 128, 1),
     0 0 40px rgba(74, 222, 128, 0.8),
     0 0 60px rgba(74, 222, 128, 0.6);
@@ -1789,7 +1824,7 @@
 .user-pitch-indicator.above .user-pitch-dot {
   background: #3b82f6;
   border-color: #2563eb;
-  box-shadow: 
+  box-shadow:
     0 0 15px rgba(59, 130, 246, 1),
     0 0 30px rgba(59, 130, 246, 0.8);
 }
@@ -1797,15 +1832,18 @@
 .user-pitch-indicator.below .user-pitch-dot {
   background: #ef4444;
   border-color: #dc2626;
-  box-shadow: 
+  box-shadow:
     0 0 15px rgba(239, 68, 68, 1),
     0 0 30px rgba(239, 68, 68, 0.8);
 }
 
 @keyframes pitch-dot-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.2);
   }
@@ -1816,7 +1854,7 @@
   font-size: 0.9rem;
   font-weight: 900;
   line-height: 1.2;
-  text-shadow: 
+  text-shadow:
     0 0 10px currentColor,
     0 2px 8px rgba(0, 0, 0, 0.9);
   animation: arrow-bounce 0.6s ease-in-out infinite;
@@ -1850,29 +1888,32 @@
 
 .pitch-status-arrow.on-target {
   color: #4ade80;
-  text-shadow: 
+  text-shadow:
     0 0 10px rgba(74, 222, 128, 1),
     0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
 .pitch-status-arrow.above {
   color: #3b82f6;
-  text-shadow: 
+  text-shadow:
     0 0 10px rgba(59, 130, 246, 1),
     0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
 .pitch-status-arrow.below {
   color: #ef4444;
-  text-shadow: 
+  text-shadow:
     0 0 10px rgba(239, 68, 68, 1),
     0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
 @keyframes arrow-bounce {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-4px);
   }
@@ -1923,12 +1964,10 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.7) 0%,
-    rgba(0, 0, 0, 0.85) 50%,
-    rgba(0, 0, 0, 0.7) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(0, 0, 0, 0.7) 0%,
+      rgba(0, 0, 0, 0.85) 50%,
+      rgba(0, 0, 0, 0.7) 100%);
   z-index: 2;
 }
 
@@ -1954,10 +1993,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.9;
     transform: scale(1.02);
@@ -2004,10 +2046,14 @@
 }
 
 @keyframes dotPulse {
-  0%, 80%, 100% {
+
+  0%,
+  80%,
+  100% {
     transform: scale(0.8);
     opacity: 0.5;
   }
+
   40% {
     transform: scale(1.2);
     opacity: 1;

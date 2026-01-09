@@ -12,7 +12,6 @@ export default function Footer() {
             <span className="footer-logo-text">SingFi</span>
           </div>
           <div className="footer-info">
-            <p className="footer-tagline">Sing along and perfect your pitch</p>
             <p className="footer-copyright">
               © {currentYear} SingFi. All rights reserved.
             </p>

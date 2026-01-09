@@ -6,12 +6,13 @@ import Game from '../components/Game';
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function GamePage() {
-  const { channel, title: urlTitle } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const videoId = searchParams.get('id');
+  const videoId = searchParams.get('video');
+  const title = searchParams.get('title');
+  const artist = searchParams.get('artist');
   const { user } = useAuth(); // MUST be called before any conditional returns
-  
+
   const [segments, setSegments] = useState([]);
   const [lyrics, setLyrics] = useState('');
   const [notes, setNotes] = useState(null);
@@ -23,7 +24,7 @@ export default function GamePage() {
   // Animated loading messages that cycle
   useEffect(() => {
     if (!loading) return;
-    
+
     const messages = [
       'Downloading audio...',
       'Separating vocals...',
@@ -31,13 +32,13 @@ export default function GamePage() {
       'Extracting pitch...',
       'Almost ready...'
     ];
-    
+
     let messageIndex = 0;
     const interval = setInterval(() => {
       messageIndex = (messageIndex + 1) % messages.length;
       setLoadingMessage(messages[messageIndex]);
     }, 2000);
-    
+
     return () => clearInterval(interval);
   }, [loading]);
 
@@ -57,15 +58,15 @@ export default function GamePage() {
     const loadGame = async () => {
       try {
         window[lockKey] = true;
-        
-        // Decode title and channel from URL
-        const title = decodeURIComponent(urlTitle || 'Unknown');
-        const artist = decodeURIComponent(channel || 'Unknown');
-        
+
+        // Use title and artist from searchParams (already defined at top)
+        const displayTitle = decodeURIComponent(title || 'Unknown');
+        const displayArtist = decodeURIComponent(artist || 'Unknown');
+
         const response = await fetch(`${API_BASE_URL}/whisper`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             youtubeId: videoId,
             title: title !== 'Unknown' ? title : null,
             artist: artist !== 'Unknown' ? artist : null,
@@ -78,34 +79,34 @@ export default function GamePage() {
         }
 
         const data = await response.json();
-        
+
         // Validate segments - check if transcription is mostly instrumental symbols
         const segments = data.segments || [];
         const hasValidSegments = segments.length > 0 && segments.some(seg => {
           const text = (seg.text || '').trim();
           const instrumentalSymbols = ['♪', '♫', '♬', '♩', '♭', '♮', '♯'];
           // Check if segment has actual text (not just instrumental symbols)
-          return text.length > 0 && !instrumentalSymbols.some(symbol => 
+          return text.length > 0 && !instrumentalSymbols.some(symbol =>
             text === symbol || text === symbol + symbol || text.includes(symbol) && text.replace(new RegExp(symbol, 'g'), '').trim().length === 0
           );
         });
-        
+
         if (!hasValidSegments && segments.length > 0) {
           // Segments are mostly instrumental - redirect to error page
           navigate('/song-error', {
             state: {
-              title: data.title || title,
-              artist: data.artist || artist,
+              title: data.title || displayTitle,
+              artist: data.artist || displayArtist,
             }
           });
           return;
         }
-        
+
         setSegments(segments);
         setLyrics(data.lyrics || '');
         setNotes(data.notes || null);
         setFirstVerseStartTime(data.firstVerseStartTime || null);
-        
+
         if (data.cached) {
           console.log('✅ Loaded from cache - instant!');
         }
@@ -125,7 +126,7 @@ export default function GamePage() {
     };
 
     loadGame();
-  }, [videoId, navigate, urlTitle, channel]);
+  }, [videoId, navigate, title, artist]);
 
   const handleBack = () => {
     navigate('/');
@@ -146,10 +147,10 @@ export default function GamePage() {
               title="Loading background"
             />
           )}
-          
+
           {/* Overlay gradient */}
           <div className="loading-overlay"></div>
-          
+
           {/* Content */}
           <div className="loading-content">
             <h2>🎤 Processing Song...</h2>

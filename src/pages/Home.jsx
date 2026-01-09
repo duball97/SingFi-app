@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-
-import './Home.css';
+// import './Home.css'; // Intentionally commented out to avoid conflicts
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -10,10 +9,6 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [isArtistSearch, setIsArtistSearch] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [suggestedSongs, setSuggestedSongs] = useState([]);
   const [loadingSuggested, setLoadingSuggested] = useState(true);
   const navigate = useNavigate();
@@ -24,14 +19,32 @@ export default function Home() {
 
   const fetchSuggestedSongs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('songs')
-        .select('*')
-        .order('views', { ascending: false })
-        .limit(10);
+      // Use the backend API route as requested
+      const response = await fetch(`${API_BASE_URL}/songs`);
+      if (!response.ok) throw new Error('Failed to fetch songs');
 
-      if (error) throw error;
-      setSuggestedSongs(data || []);
+      const data = await response.json();
+
+      // The API returns { songs: [...] } and maps fields differently
+      if (data && data.songs && data.songs.length > 0) {
+        const formattedSongs = data.songs.map(song => ({
+          id: song.id, // unique id
+          title: song.title,
+          artist: song.channel, // API returns 'channel', we use 'artist'
+          cover_url: song.thumbnail, // API returns 'thumbnail', we use 'cover_url'
+          youtube_id: song.id // API 'id' is the youtube_id
+        }));
+        setSuggestedSongs(formattedSongs);
+      } else {
+        // Fallback data if API returns empty
+        setSuggestedSongs([
+          { id: 'fb1', title: 'Bohemian Rhapsody', artist: 'Queen', cover_url: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/maxresdefault.jpg', youtube_id: 'fJ9rUzIMcZQ' },
+          { id: 'fb2', title: 'Shape of You', artist: 'Ed Sheeran', cover_url: 'https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg', youtube_id: 'JGwWNGJdvx8' },
+          { id: 'fb3', title: 'Rolling in the Deep', artist: 'Adele', cover_url: 'https://i.ytimg.com/vi/rYEDA3JcQqw/maxresdefault.jpg', youtube_id: 'rYEDA3JcQqw' },
+          { id: 'fb4', title: 'Uptown Funk', artist: 'Mark Ronson ft. Bruno Mars', cover_url: 'https://i.ytimg.com/vi/OPf0YbXqDm0/maxresdefault.jpg', youtube_id: 'OPf0YbXqDm0' },
+          { id: 'fb5', title: 'Billie Jean', artist: 'Michael Jackson', cover_url: 'https://i.ytimg.com/vi/Zi_XLOBDo_Y/maxresdefault.jpg', youtube_id: 'Zi_XLOBDo_Y' }
+        ]);
+      }
     } catch (error) {
       console.error('Error fetching suggested songs:', error);
     } finally {
@@ -39,72 +52,35 @@ export default function Home() {
     }
   };
 
-  const performSearch = async (query, page = 1) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setIsArtistSearch(false);
-      setHasMore(false);
-      setCurrentPage(1);
-      return;
-    }
-
-    if (page === 1) {
-      setSearching(true);
-    } else {
-      setLoadingMore(true);
-    }
-
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&page=${page}`);
-
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Server returned non-JSON response:', text.substring(0, 200));
-        throw new Error(`Server error: Received ${response.status} ${response.statusText}. Make sure the backend server is running on ${API_BASE_URL}`);
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Search failed: ${response.status} ${response.statusText}`);
-      }
-
+      const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(searchQuery)}`);
       const data = await response.json();
 
-      if (page === 1) {
-        setSearchResults(data);
-      } else {
-        setSearchResults(prev => [...prev, ...data]);
+      // Handle different API response structures
+      let results = [];
+      if (Array.isArray(data)) {
+        results = data;
+      } else if (data && Array.isArray(data.videos)) {
+        results = data.videos;
+      } else if (data && Array.isArray(data.results)) {
+        results = data.results;
       }
 
-      // Update pagination state if API returns it, otherwise guess
-      setHasMore(data.length > 0);
-      setCurrentPage(page);
-
+      setSearchResults(results);
     } catch (error) {
       console.error('Search error:', error);
-      // Optional: show error to user
+      setSearchResults([]);
     } finally {
       setSearching(false);
-      setLoadingMore(false);
-    }
-  };
-
-  const handleSearchSubmit = () => {
-    performSearch(searchQuery, 1);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSearchSubmit();
     }
   };
 
   const startSession = async (videoId, title, artist, coverUrl) => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate('/login');
         return;
@@ -127,16 +103,15 @@ export default function Home() {
             artist: artist,
             youtube_id: videoId,
             cover_url: coverUrl,
-            genre: 'pop', // Default
-            language: 'english' // Default
+            genre: 'pop',
+            language: 'english'
           })
           .select()
           .single();
         songId = newSong.id;
       }
 
-      // Create game session
-      const { data: gameSession, error: sessionError } = await supabase
+      const { data: gameSession, error } = await supabase
         .from('game_sessions')
         .insert({
           user_id: session.user.id,
@@ -147,8 +122,7 @@ export default function Home() {
         .select()
         .single();
 
-      if (sessionError) throw sessionError;
-
+      if (error) throw error;
       navigate(`/game/${gameSession.id}`);
     } catch (error) {
       console.error('Error starting session:', error);
@@ -156,49 +130,66 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans selection:bg-brand-orange selection:text-white overflow-x-hidden">
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-brand-orange/20 via-black to-black -z-10 pointer-events-none" />
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_bottom_left,_var(--tw-gradient-stops))] from-brand-gray/40 via-black to-black -z-10 pointer-events-none" />
+    <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden">
+      {/* Background Gradients */}
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-orange-500/20 via-black to-black -z-10" />
 
+      {/* Main Container */}
+      <main className="max-w-[1600px] mx-auto px-8 lg:px-16 py-12 lg:py-20 flex flex-col gap-24">
 
+        {/* Top Grid Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
 
-      <main className="max-w-[1600px] mx-auto px-12 py-12 lg:py-20 flex flex-col gap-24">
-        {/* Top Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
-
-          {/* Left Column: Hero Content */}
-          <div className="flex flex-col justify-center space-y-8 text-center lg:text-left">
-            <div className="space-y-4">
-              <h2 className="text-6xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] text-transparent bg-clip-text bg-gradient-to-br from-brand-orange via-orange-400 to-yellow-400 uppercase drop-shadow-sm">
-                SING ANY SONG.<br />ANY TIME.
-              </h2>
-              <p className="text-xl md:text-2xl font-bold tracking-tight text-white/90 uppercase">
-                Play Locally. Play Online. Play Solo.
+          {/* Left Column: Hero Text + Search Bar */}
+          <div className="flex flex-col gap-8 text-center lg:text-left" style={{ paddingLeft: '120px' }}>
+            <div className="space-y-6">
+              <h1
+                className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight uppercase leading-[1.1] pb-2"
+                style={{
+                  background: 'linear-gradient(180deg, #FFD84A 15%, #FF9A1F 40%, #FF4A00 70%, #E60000 90%)',
+                  backgroundSize: '100% 50%', // Repeats effectively for each line (assuming ~2 lines)
+                  backgroundRepeat: 'repeat-y',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  color: 'transparent'
+                }}
+              >
+                Sing Any Song.<br />Any Time.
+              </h1>
+              <p className="text-lg md:text-xl font-bold text-white/90 uppercase tracking-wide">
+                Play solo, online or with friends
               </p>
-              <p className="text-lg text-white/60 font-medium max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                SingFi is an online singing game. Challenge your friends for a singing battle and master your vocals.
-              </p>
+
             </div>
 
-            {/* Search Input */}
-            <div className="relative w-full max-w-xl mx-auto lg:mx-0 group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-brand-orange to-yellow-400 rounded-full opacity-30 group-hover:opacity-70 blur transition duration-500" />
-              <div className="relative flex items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-full p-2">
+            {/* Search Box - Now in Left Column */}
+            <div className="relative group max-w-lg mx-auto lg:mx-0 w-full z-20">
+              {/* Subtle outer glow that isn't muddy */}
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-orange-500 to-pink-500 rounded-full opacity-20 blur-md group-hover:opacity-40 transition duration-500" />
+
+              <div className="relative flex items-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full p-1 transition-all duration-300 focus-within:border-orange-500/50 focus-within:bg-black/60 focus-within:shadow-[0_0_30px_-5px_rgba(249,115,22,0.3)]">
+                <span className="pl-5 text-white/40">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </span>
                 <input
                   type="text"
-                  placeholder="Search for a song or artist..."
+                  className="flex-1 bg-transparent border-none outline-none text-white px-6 py-2 placeholder-white/40 text-base font-medium"
+                  placeholder="Search artist or song..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 bg-transparent border-none text-lg text-white placeholder-white/40 px-6 py-3 focus:outline-none focus:ring-0"
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 />
                 <button
-                  onClick={handleSearchSubmit}
+                  onClick={handleSearch}
                   disabled={searching}
-                  className="bg-brand-orange hover:bg-orange-600 text-white px-8 py-3 rounded-full font-bold transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-black rounded-full px-6 py-1.5 font-bold uppercase transition-all transform hover:scale-105 shadow-md shadow-orange-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm h-full"
+                  style={{
+                    background: 'linear-gradient(0deg, #FFD84A 0%, #FF9A1F 30%, #FF4A00 70%, #E60000 100%)'
+                  }}
                 >
                   {searching ? (
-                    <span className="animate-pulse">Searching...</span>
+                    <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                   ) : (
                     'Search'
                   )}
@@ -208,105 +199,79 @@ export default function Home() {
           </div>
 
           {/* Right Column: Search Results */}
-          <div className="relative w-full lg:sticky lg:top-24">
-            {searching && (
-              <div className="flex justify-center items-center py-20">
-                <div className="w-12 h-12 border-4 border-brand-orange border-t-transparent rounded-full animate-spin" />
+          <div className="w-full max-w-xl mx-auto lg:mx-0 space-y-8 min-h-[400px]">
+            {searching ? (
+              <div className="flex justify-center p-12">
+                <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
               </div>
-            )}
-
-            {!searching && searchResults.length > 0 && (
-              <div className="animate-fade-in space-y-6">
-                <h3 className="text-2xl font-bold flex items-center gap-2">
-                  <span className="text-brand-orange">🎵</span>
-                  Search Results
+            ) : searchResults.length > 0 ? (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h3 className="font-bold text-xl text-orange-500 flex items-center gap-2">
+                  <span>🎵</span> Search Results
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                  {searchResults.map((video) => (
-                    <div
-                      key={video.id}
-                      onClick={() => startSession(video.id, video.title, video.channel, video.thumbnail)}
-                      className="group relative bg-white/5 hover:bg-white/10 border border-white/5 hover:border-brand-orange/30 rounded-2xl p-4 cursor-pointer transition-all duration-300 hover:-translate-y-1 block"
-                    >
-                      <div className="aspect-video rounded-xl overflow-hidden mb-4 relative shadow-lg group-hover:shadow-brand-orange/20">
-                        <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover transform group-hover:scale-110 transition duration-500" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="w-12 h-12 bg-brand-orange rounded-full flex items-center justify-center text-white text-xl shadow-xl transform scale-75 group-hover:scale-100 transition duration-300">▶</span>
+                <div className="grid gap-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                  {searchResults.map(video => (
+                    <div key={video.id} onClick={() => startSession(video.id, video.title, video.channel, video.thumbnail)} className="group flex gap-4 p-4 bg-white/5 border border-white/5 hover:border-orange-500/50 rounded-xl cursor-pointer transition-all hover:translate-x-1 hover:bg-white/10">
+                      <div className="w-32 aspect-video rounded-lg overflow-hidden relative shadow-lg">
+                        <img src={video.thumbnail} className="w-full h-full object-cover group-hover:scale-110 transition duration-500" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                          <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white ml-0.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                            </svg>
+                          </div>
                         </div>
                       </div>
-                      <h4 className="font-bold text-lg line-clamp-1 group-hover:text-brand-orange transition-colors">{video.title}</h4>
-                      <p className="text-white/50 text-sm font-medium">{video.channel}</p>
+                      <div className="flex-1 flex flex-col justify-center">
+                        <h4 className="font-bold text-lg line-clamp-1 group-hover:text-orange-500 transition">{video.title}</h4>
+                        <p className="text-sm text-white/50">{video.channel}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-
-            {/* Logo / Decoration when not searching */}
-            {!searching && searchResults.length === 0 && (
-              <div className="hidden lg:flex justify-center items-center p-12">
-                <div className="relative w-full max-w-md aspect-square rounded-full bg-gradient-to-tr from-brand-orange/10 to-transparent flex items-center justify-center animate-pulse-slow">
-                  <div className="absolute inset-0 border border-white/5 rounded-full" />
-                  <div className="absolute inset-12 border border-white/5 rounded-full" />
-                  <div className="text-9xl opacity-20 filter blur-sm">🎤</div>
-                </div>
+            ) : (
+              /* Decorative placeholder when not searching */
+              <div className="hidden lg:flex justify-center items-center h-full opacity-20">
+                <div className="text-9xl filter blur-sm">🎤</div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Bottom Section: Suggested Songs */}
-        {!searching && searchResults.length === 0 && (
-          <div className="w-full space-y-8 animate-fade-in-up">
-            <h3 className="text-3xl font-black uppercase tracking-tight flex items-center gap-3">
-              <span className="text-brand-orange animate-bounce">🔥</span>
-              Trending to Sing
-            </h3>
+        {/* Bottom Section: Start Playing */}
+        <div className="flex flex-col items-center text-center space-y-16 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+          <h3 className="text-5xl md:text-6xl font-black uppercase tracking-tight">
+            Start Playing
+          </h3>
 
-            {loadingSuggested ? (
-              <div className="flex justify-center py-20">
-                <div className="w-10 h-10 border-4 border-white/20 border-t-brand-orange rounded-full animate-spin" />
-              </div>
-            ) : suggestedSongs.length === 0 ? (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-12 text-center">
-                <p className="text-white/50 text-xl font-medium">No trending songs found. Be the first to sing!</p>
-              </div>
-            ) : (
-              <div className="w-full overflow-x-auto pb-8 -mx-6 px-6 scrollbar-hide">
-                <div className="flex gap-6 min-w-max">
-                  {suggestedSongs.map((song) => (
-                    <div
-                      key={song.id}
-                      onClick={() => startSession(song.youtube_id, song.title, song.artist, song.cover_url)}
-                      className="group w-[280px] h-[380px] relative bg-white/5 hover:bg-white/10 border border-white/5 rounded-3xl p-5 cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-brand-orange/10 flex flex-col"
-                    >
-                      <div className="w-full aspect-square rounded-2xl overflow-hidden mb-5 relative shadow-lg">
-                        <img
-                          src={song.cover_url || `https://img.youtube.com/vi/${song.youtube_id}/maxresdefault.jpg`}
-                          alt={song.title}
-                          className="w-full h-full object-cover transform group-hover:scale-110 transition duration-700"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                          <span className="bg-white/20 backdrop-blur-md text-white px-6 py-2 rounded-full font-bold border border-white/20">Sing Now</span>
-                        </div>
-                      </div>
-                      <div className="flex-1 flex flex-col justify-end">
-                        <h4 className="text-xl font-bold leading-tight mb-1 line-clamp-2 group-hover:text-brand-orange transition-colors">{song.title}</h4>
-                        <p className="text-white/60 font-medium text-sm">{song.artist}</p>
-                      </div>
-                    </div>
-                  ))}
+          {/* Cards Row - Centered Single Row */}
+          <div className="flex flex-wrap gap-6 justify-center max-w-4xl mx-auto">
+            {suggestedSongs.map(song => (
+              <div
+                key={song.id}
+                onClick={() => startSession(song.youtube_id, song.title, song.artist, song.cover_url)}
+                className="group w-[160px] bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10"
+              >
+                <div className="w-full aspect-square rounded-lg overflow-hidden mb-5 relative shadow-md">
+                  <img src={song.cover_url} className="w-full h-full object-cover transform group-hover:scale-110 transition duration-500" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="bg-orange-500 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-0.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                      </svg>
+                    </span>
+                  </div>
                 </div>
+                <h4 className="text-sm font-bold leading-tight line-clamp-3 group-hover:text-orange-500 transition-colors text-left">{song.title}</h4>
               </div>
+            ))}
+            {suggestedSongs.length === 0 && !loadingSuggested && (
+              <div className="text-white/50 w-full text-center py-8">No songs found.</div>
             )}
-
-            <div className="text-center pt-8">
-              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/40 text-sm font-medium">
-                💡 Tip: Connect a microphone for accurate pitch detection
-              </span>
-            </div>
           </div>
-        )}
+        </div>
+
       </main>
     </div>
   );

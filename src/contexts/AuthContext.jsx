@@ -20,26 +20,43 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session - Standard Implementation
+    // Get initial session - Enhanced with Caching
     const initAuth = async () => {
       try {
+        // 1. Check LocalStorage Cache for instant UI feedback
+        const cachedProfile = localStorage.getItem('singfi_user_profile');
+        if (cachedProfile) {
+          try {
+            const parsed = JSON.parse(cachedProfile);
+            setUserProfile(parsed);
+            // Only set loading false if we have a cache, otherwise wait for Auth
+            setLoading(false);
+          } catch (e) {
+            console.error('AuthContext: Cache parse error', e);
+          }
+        }
+
         console.log('AuthContext: Getting initial session...');
-        // Standard call without timeout race
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (!mounted) return;
 
         if (error) {
           console.error('AuthContext: Error getting session:', error);
-          // Don't throw, just let it be null
         }
 
         console.log('AuthContext: Session retrieved:', session?.user ? session.user.id : 'No user');
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          // Fetch fresh data in background
           await fetchUserProfile(session.user.id);
         } else {
+          // If no user/session, clear cache and stop loading
+          if (!session?.user) {
+            localStorage.removeItem('singfi_user_profile');
+            setUserProfile(null);
+          }
           setLoading(false);
         }
       } catch (error) {
@@ -60,10 +77,12 @@ export const AuthProvider = ({ children }) => {
       setUser(session?.user ?? null);
 
       if (session?.user) {
+        // Optimistic: If we have a session, we might have a profile in memory or cache
         if (!userProfile || userProfile.id !== session.user.id) {
           await fetchUserProfile(session.user.id);
         }
       } else {
+        localStorage.removeItem('singfi_user_profile');
         setUserProfile(null);
         setLoading(false);
       }
@@ -133,6 +152,7 @@ export const AuthProvider = ({ children }) => {
         }
       } else if (data) {
         setUserProfile(data);
+        localStorage.setItem('singfi_user_profile', JSON.stringify(data));
       } else {
         setUserProfile(null);
       }

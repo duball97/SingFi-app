@@ -15,7 +15,7 @@ export default function Header() {
     <header className="site-header">
       <div className="header-container">
         <Link to="/" className="header-logo">
-          <img src="/iconlogo.png" alt="SingFi" className="logo-image" />
+          <img src="/singfi.png" alt="SingFi" className="logo-image" />
         </Link>
         <nav className="header-nav">
           <Link to="/" className="nav-link">Home</Link>

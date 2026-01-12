@@ -11,7 +11,7 @@
   min-width: 0 !important;
   padding: 8px !important;
   background: transparent !important;
-  color: rgba(255, 255, 255, 0.3) !important;
+  color: transparent !important;
   transition: all 0.3s ease !important;
   min-height: 0 !important;
   border: none !important;
@@ -20,6 +20,5 @@
 }
 
 .search-icon-button:hover {
-  color: #ff6b35 !important;
   transform: scale(1.25) !important;
 }

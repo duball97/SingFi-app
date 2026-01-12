@@ -80,8 +80,8 @@ export default function Home() {
     }
   };
 
-  const startSession = async (videoId, title, artist, coverUrl) => {
-    console.log('Starting session with:', { videoId, title, artist, coverUrl });
+  const startSession = async (videoId, title, artist, coverUrl, isFromDatabase = false) => {
+    console.log('Starting session with:', { videoId, title, artist, coverUrl, isFromDatabase });
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -91,11 +91,38 @@ export default function Home() {
         return;
       }
 
-      // Navigate directly to game page with the videoId
-      // The game page can handle creating/fetching the session
-      navigate(`/game?video=${videoId}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist || '')}`);
+      // If song is from database (suggested songs), go directly to game
+      if (isFromDatabase) {
+        console.log('Song is from database, going directly to game');
+        navigate(`/game?video=${videoId}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist || '')}`);
+        return;
+      }
+
+      // For search results, check if the song exists in the database
+      const response = await fetch(`${API_BASE_URL}/getSong?youtubeId=${videoId}`);
+
+      if (response.ok) {
+        const songData = await response.json();
+        // Song exists in database - go directly to game
+        if (songData && songData.song) {
+          console.log('Song found in database, going to game');
+          navigate(`/game?video=${videoId}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist || '')}`);
+          return;
+        }
+      }
+
+      // Song not in database - go to loading page to process it
+      console.log('Song not in database, going to loading page');
+      const titleEncoded = encodeURIComponent(title || 'Unknown');
+      const artistEncoded = encodeURIComponent(artist || 'Unknown');
+      navigate(`/loading-song/${artistEncoded}/${titleEncoded}?id=${videoId}`);
+
     } catch (error) {
       console.error('Error starting session:', error);
+      // On error, try loading page anyway
+      const titleEncoded = encodeURIComponent(title || 'Unknown');
+      const artistEncoded = encodeURIComponent(artist || 'Unknown');
+      navigate(`/loading-song/${artistEncoded}/${titleEncoded}?id=${videoId}`);
     }
   };
 
@@ -139,7 +166,18 @@ export default function Home() {
                   onClick={handleSearch}
                   className="search-icon-button"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <defs>
+                      <linearGradient id="searchGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="15%" stopColor="#FFD84A" />
+                        <stop offset="40%" stopColor="#FF9A1F" />
+                        <stop offset="70%" stopColor="#FF4A00" />
+                        <stop offset="90%" stopColor="#E60000" />
+                      </linearGradient>
+                    </defs>
+                    <circle cx="11" cy="11" r="8" stroke="url(#searchGradient)"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="url(#searchGradient)"></line>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -198,7 +236,7 @@ export default function Home() {
             {suggestedSongs.slice(0, 4).map(song => (
               <div
                 key={song.id}
-                onClick={() => startSession(song.youtube_id, song.title, song.artist, song.cover_url)}
+                onClick={() => startSession(song.youtube_id, song.title, song.artist, song.cover_url, true)}
                 className="group w-[160px] bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-orange-500/10"
               >
                 <div className="w-full aspect-square rounded-lg overflow-hidden mb-5 relative shadow-md">

@@ -33,10 +33,10 @@ let toolPaths = null;
 // Initialize tools on first use
 async function initializeTools() {
   if (toolPaths) return toolPaths;
-  
+
   // Try to get existing tools
   toolPaths = getToolPaths();
-  
+
   // If tools don't exist, try to download them (Windows only for now)
   if (!toolPaths.ytDlp || (process.platform === 'win32' && !toolPaths.ffmpeg)) {
     console.log('🔧 Setting up tools automatically...');
@@ -52,24 +52,24 @@ async function initializeTools() {
       };
     }
   }
-  
+
   return toolPaths;
 }
 
 // Helper to find yt-dlp command
 async function findYtDlpCommand() {
   await initializeTools();
-  
+
   // First try local tools
   if (toolPaths.ytDlp && fs.existsSync(toolPaths.ytDlp)) {
     return toolPaths.ytDlp;
   }
-  
+
   // Fall back to PATH
-  const commands = process.platform === 'win32' 
+  const commands = process.platform === 'win32'
     ? ['yt-dlp.exe', 'yt-dlp', 'python -m yt_dlp']
     : ['yt-dlp', 'python3 -m yt_dlp', 'python -m yt_dlp'];
-  
+
   for (const cmd of commands) {
     try {
       await execAsync(`${cmd} --version`);
@@ -78,7 +78,7 @@ async function findYtDlpCommand() {
       continue;
     }
   }
-  
+
   throw new Error(
     'yt-dlp not found! Run the server once to auto-download, or install manually:\n' +
     'Windows: Download from https://github.com/yt-dlp/yt-dlp/releases\n' +
@@ -90,12 +90,12 @@ async function findYtDlpCommand() {
 // Helper to find ffmpeg command
 async function findFfmpegCommand() {
   await initializeTools();
-  
+
   // First try local tools (Windows)
   if (toolPaths.ffmpeg && fs.existsSync(toolPaths.ffmpeg)) {
     return toolPaths.ffmpeg;
   }
-  
+
   // Fall back to PATH
   const cmd = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
   try {
@@ -129,17 +129,17 @@ const getOpenAI = () => {
 // Check if transcription is mostly instrumental symbols (indicates vocals separation failed)
 function isMostlyInstrumental(segments) {
   if (!segments || segments.length === 0) return false;
-  
+
   const instrumentalSymbols = ['♪', '♫', '♬', '♩', '♭', '♮', '♯'];
   let instrumentalCount = 0;
   let totalSegments = 0;
-  
+
   segments.forEach(seg => {
     const text = (seg.text || '').trim();
     if (text.length > 0) {
       totalSegments++;
       // Check if segment is mostly instrumental symbols
-      const isInstrumental = instrumentalSymbols.some(symbol => 
+      const isInstrumental = instrumentalSymbols.some(symbol =>
         text.includes(symbol) || text === symbol || text === symbol + symbol
       );
       if (isInstrumental) {
@@ -147,7 +147,7 @@ function isMostlyInstrumental(segments) {
       }
     }
   });
-  
+
   // If more than 70% of segments are instrumental symbols, consider it failed
   const instrumentalRatio = totalSegments > 0 ? instrumentalCount / totalSegments : 0;
   return instrumentalRatio > 0.7;
@@ -164,7 +164,7 @@ async function detectGenre(segments, title, artist, lyrics) {
     const previewText = lyrics ? lyrics.substring(0, 1000) : segments.slice(0, 15).map(s => s.text || '').join(' ');
 
     const openai = getOpenAI();
-    
+
     const messages = [
       {
         role: "system",
@@ -196,11 +196,11 @@ Return ONLY the genre name (e.g., "Rock" or "Hip Hop").`
     });
 
     const result = response.choices[0]?.message?.content?.trim();
-    
+
     // Validate genre is one of the allowed values
     const validGenres = ['Rock', 'Hip Hop', 'Pop', 'Country', 'R&B', 'Electronic', 'Jazz', 'Classical', 'Latin', 'Metal', 'Folk', 'Reggae', 'Blues', 'Punk', 'Indie', 'Other'];
     const detectedGenre = validGenres.find(g => result.toLowerCase().includes(g.toLowerCase())) || 'Other';
-    
+
     console.log(`✅ [GENRE] Detected genre: ${detectedGenre}`);
     return detectedGenre;
   } catch (error) {
@@ -226,7 +226,7 @@ async function detectFirstVerse(segments, title, artist) {
     }));
 
     const openai = getOpenAI();
-    
+
     const messages = [
       {
         role: "system",
@@ -279,9 +279,9 @@ async function retryFileOperation(operation, maxRetries = 5, delay = 200) {
       return await operation();
     } catch (err) {
       const isFileLocked = err.message.includes('being used by another process') ||
-                          err.message.includes('EACCES') ||
-                          err.message.includes('EBUSY');
-      
+        err.message.includes('EACCES') ||
+        err.message.includes('EBUSY');
+
       if (isFileLocked && i < maxRetries - 1) {
         console.log(`⚠️ File locked, retrying in ${delay}ms... (attempt ${i + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -290,6 +290,120 @@ async function retryFileOperation(operation, maxRetries = 5, delay = 200) {
       }
       throw err;
     }
+  }
+}
+
+// Helper function to compress audio if it exceeds Whisper's 25 MB limit
+async function ensureAudioSizeLimit(audioBuffer, maxSizeBytes = 24.5 * 1024 * 1024) {
+  const currentSize = audioBuffer.length;
+  const maxSizeMB = (maxSizeBytes / 1024 / 1024).toFixed(2);
+  const currentSizeMB = (currentSize / 1024 / 1024).toFixed(2);
+  
+  if (currentSize <= maxSizeBytes) {
+    console.log(`✅ [SIZE CHECK] Audio size OK: ${currentSizeMB}MB (limit: ${maxSizeMB}MB)`);
+    return audioBuffer;
+  }
+
+  const overage = currentSize - maxSizeBytes;
+  const overageMB = (overage / 1024 / 1024).toFixed(2);
+  console.warn(`⚠️ [SIZE CHECK] Audio too large: ${currentSizeMB}MB (${overageMB}MB over limit of ${maxSizeMB}MB), compressing...`);
+  
+  // Write buffer to temp file
+  const tempInput = join(tmpdir(), `compress-input-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.wav`);
+  const tempOutput = join(tmpdir(), `compress-output-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.wav`);
+
+  try {
+    // Write original audio to temp file
+    await retryFileOperation(async () => {
+      fs.writeFileSync(tempInput, audioBuffer);
+    });
+
+    const ffmpegCmd = await findFfmpegCommand();
+    
+    // Calculate target sample rate based on current size
+    // Use 24.5 MB as safe limit (0.5 MB buffer)
+    const sizeRatio = currentSize / maxSizeBytes;
+    let targetSampleRate = 16000;
+    
+    // For files even slightly over, reduce sample rate proportionally
+    // Calculate needed reduction: if file is X% over, reduce sample rate by similar %
+    if (sizeRatio > 1.3) {
+      targetSampleRate = 8000; // Very aggressive for files >30% over
+      console.log(`   → [COMPRESS] Using 8kHz sample rate (file is ${(sizeRatio * 100).toFixed(1)}% over limit)`);
+    } else if (sizeRatio > 1.1) {
+      targetSampleRate = 12000; // Moderate reduction for files 10-30% over
+      console.log(`   → [COMPRESS] Using 12kHz sample rate (file is ${(sizeRatio * 100).toFixed(1)}% over limit)`);
+    } else {
+      // For small overages (1-10%), use 14kHz to reduce just enough
+      targetSampleRate = 14000;
+      console.log(`   → [COMPRESS] Using 14kHz sample rate (file is ${(sizeRatio * 100).toFixed(1)}% over limit)`);
+    }
+
+    // Recompress with lower sample rate
+    await execAsync(
+      `"${ffmpegCmd}" -y -i "${tempInput}" -ac 1 -ar ${targetSampleRate} -acodec pcm_s16le -f wav "${tempOutput}"`
+    );
+
+    // Wait for file to be written
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Read compressed audio
+    let compressedBuffer = await retryFileOperation(async () => {
+      return fs.readFileSync(tempOutput);
+    });
+
+    let newSize = compressedBuffer.length;
+    const newSizeMB = (newSize / 1024 / 1024).toFixed(2);
+    const reduction = ((1 - newSize / currentSize) * 100).toFixed(1);
+    console.log(`   ✅ [COMPRESS] Compressed to ${newSizeMB}MB (${reduction}% reduction)`);
+
+    // If still too large, try progressively lower sample rates
+    const sampleRates = [12000, 10000, 8000];
+    for (const rate of sampleRates) {
+      if (newSize <= maxSizeBytes) break;
+      if (rate >= targetSampleRate) continue; // Skip if we already tried this rate
+      
+      console.warn(`   ⚠️ [COMPRESS] Still too large (${newSizeMB}MB), trying ${rate}Hz...`);
+      await execAsync(
+        `"${ffmpegCmd}" -y -i "${tempInput}" -ac 1 -ar ${rate} -acodec pcm_s16le -f wav "${tempOutput}"`
+      );
+      await new Promise(resolve => setTimeout(resolve, 200));
+      compressedBuffer = await retryFileOperation(async () => {
+        return fs.readFileSync(tempOutput);
+      });
+      newSize = compressedBuffer.length;
+      console.log(`   → [COMPRESS] Now ${(newSize / 1024 / 1024).toFixed(2)}MB`);
+    }
+
+    // Final check
+    if (newSize > maxSizeBytes) {
+      console.error(`   ❌ [COMPRESS] Cannot compress below limit. Final size: ${(newSize / 1024 / 1024).toFixed(2)}MB`);
+      throw new Error(`Audio file too large even after compression: ${(newSize / 1024 / 1024).toFixed(2)}MB (limit: ${maxSizeMB}MB)`);
+    }
+
+    console.log(`   ✅ [COMPRESS] Final size: ${(newSize / 1024 / 1024).toFixed(2)}MB (under limit)`);
+
+    // Clean up temp files
+    try {
+      if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
+      if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
+    } catch (cleanupErr) {
+      console.warn(`⚠️ Failed to cleanup temp compression files: ${cleanupErr.message}`);
+    }
+
+    return compressedBuffer;
+
+  } catch (err) {
+    // Clean up on error
+    try {
+      if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
+      if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
+    } catch (cleanupErr) {
+      // Ignore cleanup errors
+    }
+    
+    console.error(`❌ [COMPRESS] Compression failed: ${err.message}`);
+    throw new Error(`Failed to compress audio: ${err.message}`);
   }
 }
 
@@ -307,7 +421,7 @@ async function youtubeToWavBuffer(youtubeUrl) {
 
     // Download best audio using yt-dlp
     await execAsync(`${ytDlpCmd} -f bestaudio -o "${tempInput}" "${youtubeUrl}"`);
-    
+
     // Wait a bit to ensure file is fully closed on Windows
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -324,12 +438,12 @@ async function youtubeToWavBuffer(youtubeUrl) {
     // Find ffmpeg command (auto-downloads on Windows if needed)
     const ffmpegCmd = await findFfmpegCommand();
     console.log(`✅ Using ffmpeg: ${ffmpegCmd}`);
-    
+
     // Convert to WAV 16kHz mono
     await execAsync(
       `"${ffmpegCmd}" -y -i "${tempInput}" -ac 1 -ar 16000 -f wav "${tempOutput}"`
     );
-    
+
     // Wait a bit to ensure output file is fully written
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -352,13 +466,13 @@ async function youtubeToWavBuffer(youtubeUrl) {
     };
 
     // Clean up asynchronously (don't block)
-    cleanup(tempInput).catch(() => {});
-    cleanup(tempOutput).catch(() => {});
+    cleanup(tempInput).catch(() => { });
+    cleanup(tempOutput).catch(() => { });
 
     return buffer;
   } catch (err) {
     console.error("FFMPEG/YTDLP ERROR:", err);
-    
+
     // Clean up on error
     try {
       if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
@@ -366,7 +480,7 @@ async function youtubeToWavBuffer(youtubeUrl) {
     } catch (cleanupErr) {
       // Ignore cleanup errors
     }
-    
+
     // Provide helpful error message
     if (err.message.includes('not recognized') || err.message.includes('not found')) {
       throw new Error(
@@ -376,7 +490,7 @@ async function youtubeToWavBuffer(youtubeUrl) {
         `Make sure they are in your system PATH.`
       );
     }
-    
+
     throw new Error(`Audio processing failed: ${err.message}`);
   }
 }
@@ -400,12 +514,12 @@ router.post("/", async (req, res) => {
     if (cached && cached.segments) {
       // Check if cached transcription is mostly instrumental symbols (indicates vocals separation failed)
       const cachedIsInstrumental = isMostlyInstrumental(cached.segments);
-      
+
       if (cachedIsInstrumental) {
         console.warn('⚠️ Cached transcription is mostly instrumental symbols (♪♪)');
         console.warn('   → This indicates vocals separation failed - re-transcribing with original audio...');
         console.log('   → Re-processing and will update database with new transcription...');
-        
+
         // Continue with full processing to get better transcription
         // The upsert at the end will update the existing record with new lyrics and segments
       } else if (cached.first_verse_start_time !== null && cached.first_verse_start_time !== undefined) {
@@ -413,7 +527,7 @@ router.post("/", async (req, res) => {
         console.log('✅ Loaded from cache:', youtubeId);
         console.log('📝 Cached segments:', cached.segments.length, 'verse lines');
         console.log('🎵 First verse start time:', cached.first_verse_start_time);
-        
+
         // Return cached data including firstVerseStartTime
         return res.json({
           cached: true,
@@ -428,23 +542,23 @@ router.post("/", async (req, res) => {
         });
       } else {
         console.log('⚠️ Cache exists but missing first_verse_start_time, detecting first verse from cached segments...');
-        
+
         // Reuse cached segments and only detect first verse
         try {
           const firstVerseStartTime = await detectFirstVerse(cached.segments, cached.title || title, cached.artist || artist);
-          
+
           // Update database with first verse start time
           const { error: updateError } = await supabase
             .from("singfi_songs")
             .update({ first_verse_start_time: firstVerseStartTime })
             .eq("youtube_id", youtubeId);
-          
+
           if (updateError) {
             console.error('❌ [UPDATE] Error updating first_verse_start_time:', updateError.message);
           } else {
             console.log(`✅ [UPDATE] Updated first_verse_start_time to ${firstVerseStartTime.toFixed(2)}s`);
           }
-          
+
           // Return cached data with newly detected first verse
           return res.json({
             cached: true,
@@ -463,11 +577,11 @@ router.post("/", async (req, res) => {
           console.log('⚠️ Falling back to full processing...');
         }
       }
-      
+
       // Check if notes are missing - if so, retry pitch extraction only
       if (!cached.notes || (Array.isArray(cached.notes) && cached.notes.length === 0)) {
         console.log('⚠️ [CACHE] Cached song has no notes, retrying pitch extraction...');
-        
+
         // Try to load vocals from file
         const vocalsFilePath = join(vocalsDir, `${youtubeId}.wav`);
         if (fs.existsSync(vocalsFilePath)) {
@@ -475,30 +589,30 @@ router.post("/", async (req, res) => {
           try {
             const vocalsBuffer = fs.readFileSync(vocalsFilePath);
             console.log(`   → [RETRY PITCH] Loaded vocals: ${(vocalsBuffer.length / 1024 / 1024).toFixed(2)}MB`);
-            
+
             // Extract pitch from vocals
             const pitchStart = Date.now();
             const pitchExtractionPromise = extractPitch(vocalsBuffer);
-            const timeoutPromise = new Promise((_, reject) => 
+            const timeoutPromise = new Promise((_, reject) =>
               setTimeout(() => reject(new Error('Pitch extraction timeout (60s)')), 60000)
             );
-            
+
             const pitchData = await Promise.race([pitchExtractionPromise, timeoutPromise]);
             const pitchTime = ((Date.now() - pitchStart) / 1000).toFixed(1);
-            
+
             if (pitchData && pitchData.length > 0) {
               console.log(`   ✅ [RETRY PITCH] Extracted ${pitchData.length} pitch points in ${pitchTime}s`);
               const notes = generateNotesFromPitch(pitchData, cached.segments);
               console.log(`   ✅ [RETRY PITCH] Generated ${notes.length} notes`);
-              
+
               // Update cache with notes
               await supabase
                 .from("singfi_songs")
                 .update({ notes: notes })
                 .eq("youtube_id", youtubeId);
-              
+
               console.log('   ✅ [RETRY PITCH] Updated cache with notes');
-              
+
               return res.json({
                 cached: true,
                 segments: cached.segments,
@@ -507,6 +621,7 @@ router.post("/", async (req, res) => {
                 title: cached.title,
                 artist: cached.artist,
                 thumbnail: cached.thumbnail || null,
+                firstVerseStartTime: cached.first_verse_start_time || null,
                 genre: cached.genre || null,
               });
             } else {
@@ -521,7 +636,7 @@ router.post("/", async (req, res) => {
           console.warn('   ⚠️ [RETRY PITCH] Cannot retry pitch extraction, returning cached without notes');
         }
       }
-      
+
       // Return cached data (with or without notes)
       return res.json({
         cached: true,
@@ -531,10 +646,11 @@ router.post("/", async (req, res) => {
         title: cached.title,
         artist: cached.artist,
         thumbnail: cached.thumbnail || null,
+        firstVerseStartTime: cached.first_verse_start_time || null,
         genre: cached.genre || null,
       });
     }
-    
+
     // If cache check failed due to RLS (not found), continue processing
     if (cacheError && cacheError.code !== 'PGRST116') {
       console.warn('⚠️ Cache check error (continuing anyway):', cacheError.message);
@@ -549,12 +665,12 @@ router.post("/", async (req, res) => {
       try {
         console.log("📸 Fetching YouTube thumbnail...");
         const thumbnailUrl = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`;
-        
+
         const thumbnailResponse = await fetch(thumbnailUrl);
         if (thumbnailResponse.ok) {
           const thumbnailBuffer = Buffer.from(await thumbnailResponse.arrayBuffer());
           const storagePath = `thumbnails/${youtubeId}.jpg`;
-          
+
           const { error: thumbUploadError } = await supabase
             .storage
             .from('thumbnails')
@@ -562,7 +678,7 @@ router.post("/", async (req, res) => {
               contentType: 'image/jpeg',
               upsert: true
             });
-          
+
           if (thumbUploadError) {
             console.warn('⚠️ Failed to upload thumbnail:', thumbUploadError.message);
             return thumbnailUrl;
@@ -576,11 +692,11 @@ router.post("/", async (req, res) => {
           if (hqResponse.ok) {
             const thumbnailBuffer = Buffer.from(await hqResponse.arrayBuffer());
             const storagePath = `thumbnails/${youtubeId}.jpg`;
-            
+
             const { error } = await supabase.storage
               .from('thumbnails')
               .upload(storagePath, thumbnailBuffer, { contentType: 'image/jpeg', upsert: true });
-            
+
             if (!error) {
               console.log(`✅ Thumbnail saved (hq): ${(thumbnailBuffer.length / 1024).toFixed(2)}KB`);
               return storagePath;
@@ -600,7 +716,7 @@ router.post("/", async (req, res) => {
       youtubeToWavBuffer(youtubeUrl),
       fetchThumbnail()
     ]);
-    
+
     console.log("WAV size:", (wavBuffer.length / 1024 / 1024).toFixed(2), "MB");
 
     const openai = getOpenAI();
@@ -613,12 +729,12 @@ router.post("/", async (req, res) => {
       console.warn("   → This might happen with heavily processed/autotuned vocals or certain music styles");
       return null;
     });
-    
+
     let vocalsBuffer = null;
     if (vocalsResult?.vocals) {
       const demucsTime = ((Date.now() - demucsStart) / 1000).toFixed(1);
       console.log(`✅ [DEMUCS] Vocals isolated successfully in ${demucsTime}s`);
-      
+
       // Additional validation: check if vocals are actually usable
       if (vocalsResult.vocals.length >= 10000) {
         vocalsBuffer = vocalsResult.vocals;
@@ -629,40 +745,80 @@ router.post("/", async (req, res) => {
     } else {
       console.warn("   ⚠️ [DEMUCS] No vocals returned from separation - will use original audio");
     }
-    
+
     // STEP 3: Transcribe vocals if available, otherwise original audio
     console.log("\n🎤 [WHISPER] Starting Whisper transcription...");
-    const audioToTranscribe = vocalsBuffer || wavBuffer;
+    let audioToTranscribe = vocalsBuffer || wavBuffer;
     const audioSource = vocalsBuffer ? 'isolated vocals' : 'original audio';
     console.log(`   → [WHISPER] Transcribing from: ${audioSource}`);
-    
-    // Write buffer to temp file for Whisper API (Node.js doesn't have File API)
-    const tempAudioFile = join(tmpdir(), `whisper-${Date.now()}-${Math.random().toString(36).substring(2, 9)}.wav`);
-    await retryFileOperation(async () => {
-      fs.writeFileSync(tempAudioFile, audioToTranscribe);
-    });
-    
+
+    // Check and compress audio if it exceeds Whisper's 25 MB limit
+    audioToTranscribe = await ensureAudioSizeLimit(audioToTranscribe);
+
+    // Create a File object from the buffer for Whisper API
+    // Node.js 18+ has a global File constructor
+    // We'll create a fresh File object for each retry attempt
+
     const whisperStart = Date.now();
     let transcription;
-    try {
-      // Create a File-like object using fs.createReadStream
-      const fileStream = fs.createReadStream(tempAudioFile);
-      
-      transcription = await openai.audio.transcriptions.create({
-        file: fileStream,
-        model: "whisper-1",
-        response_format: "verbose_json",
-      });
-    } finally {
-      // Clean up temp file
+
+    // Retry logic for Whisper API (handles temporary 500 errors)
+    const maxRetries = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        if (fs.existsSync(tempAudioFile)) {
-          await retryFileOperation(async () => {
-            fs.unlinkSync(tempAudioFile);
-          }, 3, 100);
+        // Recreate File object for each attempt to ensure it's fresh
+        const fileForAttempt = new File([audioToTranscribe], 'audio.wav', { type: 'audio/wav' });
+        
+        transcription = await openai.audio.transcriptions.create({
+          file: fileForAttempt,
+          model: "whisper-1",
+          response_format: "verbose_json",
+        });
+
+        // Success - break out of retry loop
+        break;
+      } catch (whisperError) {
+        lastError = whisperError;
+        const is500Error = whisperError.status === 500 || whisperError.message?.includes('500');
+        const is400Error = whisperError.status === 400;
+        const is413Error = whisperError.status === 413 || whisperError.message?.includes('413') || whisperError.message?.includes('Maximum content size');
+
+        // Handle 413 error (file too large) - compress and retry
+        if (is413Error && attempt < maxRetries) {
+          console.warn(`⚠️ [WHISPER] Attempt ${attempt}/${maxRetries} failed with 413 (file too large), compressing and retrying...`);
+          try {
+            // Compress the audio more aggressively
+            audioToTranscribe = await ensureAudioSizeLimit(audioToTranscribe, 24 * 1024 * 1024); // Use 24 MB to be safe
+            const delay = attempt * 1000; // 1s, 2s, 3s
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          } catch (compressError) {
+            console.error(`❌ [WHISPER] Compression failed: ${compressError.message}`);
+            throw new Error(`Audio file too large for Whisper API even after compression: ${compressError.message}`);
+          }
         }
-      } catch (cleanupErr) {
-        console.warn(`⚠️ Failed to cleanup temp audio file: ${cleanupErr.message}`);
+
+        if (is500Error && attempt < maxRetries) {
+          const delay = attempt * 2000; // 2s, 4s, 6s
+          console.warn(`⚠️ [WHISPER] Attempt ${attempt}/${maxRetries} failed with 500 error, retrying in ${delay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (is400Error && attempt < maxRetries) {
+          // For 400 errors, wait and retry with a new File object
+          const delay = attempt * 1000; // 1s, 2s, 3s
+          console.warn(`⚠️ [WHISPER] Attempt ${attempt}/${maxRetries} failed with 400 error, retrying in ${delay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // Not a retryable error or max retries reached
+        console.error('Whisper error:', whisperError);
+        console.error('Error details:', whisperError);
+        throw whisperError;
       }
     }
     const whisperTime = ((Date.now() - whisperStart) / 1000).toFixed(1);
@@ -672,19 +828,19 @@ router.post("/", async (req, res) => {
     const fullText = transcription.text || "";
 
     console.log('🎤 Whisper: Total segments:', segments.length);
-    
+
     // Check if transcription is mostly instrumental symbols (♪♪) - indicates transcription failed
     const transcriptionIsInstrumental = isMostlyInstrumental(segments);
-    
+
     if (transcriptionIsInstrumental) {
       console.warn('⚠️ [TRANSCRIPTION] Transcription appears to be mostly instrumental symbols (♪♪)');
       console.warn('   → This indicates vocal separation likely failed - will use original audio for pitch extraction');
     }
-    
+
     // Check if segments have word-level data
     const hasWords = segments.length > 0 && segments[0].words && Array.isArray(segments[0].words);
     console.log(`🎤 Whisper: Word-level timestamps available: ${hasWords ? 'YES' : 'NO'}`);
-    
+
     if (segments.length > 0) {
       console.log(`🎤 Whisper: First segment structure:`, {
         hasText: !!segments[0].text,
@@ -693,14 +849,14 @@ router.post("/", async (req, res) => {
         sampleWord: segments[0].words?.[0] || null
       });
     }
-    
+
     let rawSegments;
-    
+
     if (hasWords) {
       // Extract word-by-word from segments
       console.log('🎤 Building word-by-word lyrics from Whisper words...');
       const words = [];
-      
+
       for (const seg of segments) {
         if (seg.words && Array.isArray(seg.words)) {
           for (const word of seg.words) {
@@ -715,7 +871,7 @@ router.post("/", async (req, res) => {
           const wordTexts = seg.text.split(/\s+/).filter(w => w.length > 0);
           const segmentDuration = (seg.end || 0) - (seg.start || 0);
           const wordDuration = segmentDuration / wordTexts.length;
-          
+
           wordTexts.forEach((wordText, idx) => {
             words.push({
               text: wordText,
@@ -725,24 +881,24 @@ router.post("/", async (req, res) => {
           });
         }
       }
-      
+
       // Group words into phrases (3-5 words per phrase for better display)
       rawSegments = [];
       const wordsPerPhrase = 4; // Show 4 words at a time
-      
+
       for (let i = 0; i < words.length; i += wordsPerPhrase) {
         const phraseWords = words.slice(i, i + wordsPerPhrase);
         const phraseText = phraseWords.map(w => w.text).join(' ');
         const phraseStart = phraseWords[0].start;
         const phraseEnd = phraseWords[phraseWords.length - 1].end;
-        
+
         rawSegments.push({
           text: phraseText,
           start: phraseStart,
           end: phraseEnd,
         });
       }
-      
+
       console.log(`🎤 Built ${rawSegments.length} word-based phrases from ${words.length} words`);
     } else {
       // Fallback: use segment-level data (original behavior)
@@ -758,16 +914,16 @@ router.post("/", async (req, res) => {
     // Whisper often groups multiple verses into one segment, so we need to split them
     console.log('🎤 Splitting segments into individual verses...');
     const verseSegments = [];
-    
+
     for (const seg of rawSegments) {
       const text = seg.text || "";
       const start = seg.start || 0;
       const end = seg.end || 0;
       const duration = end - start;
-      
+
       // Split by line breaks first (most common)
       let lines = text.split(/\n+/).filter(line => line.trim().length > 0);
-      
+
       // If no line breaks, try splitting by sentence endings (., !, ?) followed by space
       if (lines.length === 1) {
         lines = text.split(/([.!?]\s+)/).filter(line => line.trim().length > 0);
@@ -784,17 +940,17 @@ router.post("/", async (req, res) => {
         }
         lines = rejoined.filter(line => line.trim().length > 0);
       }
-      
+
       // If still only one line, try splitting by commas (for very long segments)
       if (lines.length === 1 && text.length > 50) {
         const commaSplit = text.split(/,\s+/);
         if (commaSplit.length > 1) {
-          lines = commaSplit.map((line, idx) => 
+          lines = commaSplit.map((line, idx) =>
             idx < commaSplit.length - 1 ? line + ',' : line
           );
         }
       }
-      
+
       // Distribute timing proportionally across verses
       if (lines.length > 1) {
         const lineDuration = duration / lines.length;
@@ -814,7 +970,7 @@ router.post("/", async (req, res) => {
         });
       }
     }
-    
+
     console.log(`🎤 Split ${rawSegments.length} segments into ${verseSegments.length} individual verses`);
     rawSegments = verseSegments; // Use the split verses
 
@@ -824,9 +980,9 @@ router.post("/", async (req, res) => {
     let pitchAudioBuffer = vocalsBuffer || null; // Use vocals from Demucs if available
     let pitchExtractionSucceeded = false;
     let usingOriginalAudio = false;
-    
+
     console.log(`\n🎵 [PITCH EXTRACTION] Starting pitch extraction...`);
-    
+
     // Check if we should use original audio instead of vocals for pitch extraction
     if (transcriptionIsInstrumental || !pitchAudioBuffer || pitchAudioBuffer.length < 10000) {
       if (transcriptionIsInstrumental) {
@@ -840,25 +996,25 @@ router.post("/", async (req, res) => {
       pitchAudioBuffer = wavBuffer; // Use original audio
       usingOriginalAudio = true;
     }
-    
+
     console.log(`   → [PITCH] Audio buffer available: ${pitchAudioBuffer ? 'YES' : 'NO'}`);
     console.log(`   → [PITCH] Using: ${usingOriginalAudio ? 'ORIGINAL AUDIO (fallback)' : 'ISOLATED VOCALS'}`);
-    
+
     if (pitchAudioBuffer) {
       console.log(`   → [PITCH] Audio buffer size: ${(pitchAudioBuffer.length / 1024 / 1024).toFixed(2)}MB`);
-      
+
       try {
         const pitchStart = Date.now();
         // Add timeout to prevent hanging (60 seconds max)
         const pitchExtractionPromise = extractPitch(pitchAudioBuffer);
-        const timeoutPromise = new Promise((_, reject) => 
+        const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Pitch extraction timeout (60s)')), 60000)
         );
-        
+
         console.log(`   → [PITCH] Running pitch detection algorithm...`);
         const pitchData = await Promise.race([pitchExtractionPromise, timeoutPromise]);
         const pitchTime = ((Date.now() - pitchStart) / 1000).toFixed(1);
-        
+
         if (pitchData && pitchData.length > 0) {
           console.log(`   ✅ [PITCH] Extracted ${pitchData.length} pitch points in ${pitchTime}s`);
           console.log(`   → [PITCH] Generating notes from pitch data...`);

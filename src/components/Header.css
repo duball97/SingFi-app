@@ -103,10 +103,10 @@
 }
 
 .signup-button {
-  background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%) !important;
+  background: linear-gradient(180deg, #FFD84A 15%, #FF9A1F 40%, #FF4A00 70%, #E60000 90%) !important;
   color: white !important;
-  padding: 12px 28px !important;
-  min-height: 40px !important;
+  padding: 8px 28px !important;
+  min-height: 32px !important;
   min-width: 110px !important;
   border-radius: 50px !important;
   font-size: 0.9rem !important;
@@ -116,10 +116,11 @@
   align-items: center !important;
   justify-content: center !important;
   border: none !important;
+  text-transform: uppercase !important;
 }
 
 .signup-button:hover {
-  background: linear-gradient(135deg, #ff7b45 0%, #ff9a52 100%) !important;
+  background: linear-gradient(180deg, #FFE05A 15%, #FFAA2F 40%, #FF5A10 70%, #FF0010 90%) !important;
   transform: scale(1.05);
   color: white !important;
 }

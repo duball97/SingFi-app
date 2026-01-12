@@ -95,23 +95,9 @@ export default function LoadingSongPage() {
     const titleEncoded = encodeURIComponent(song.title || 'Unknown');
     const channelEncoded = encodeURIComponent(song.channel || 'Unknown');
 
-    // Check if song exists in database (should always be true for random songs, but check to be safe)
-    try {
-      const response = await fetch(`${API_BASE_URL}/getSong?youtubeId=${song.id}`);
-      const data = await response.json();
-
-      if (data.cached) {
-        // Song exists, navigate directly to game (will load instantly)
-        navigate(`/game/${channelEncoded}/${titleEncoded}?id=${song.id}`);
-      } else {
-        // Song doesn't exist (shouldn't happen for random songs), navigate to loading page
-        navigate(`/loading-song/${channelEncoded}/${titleEncoded}?id=${song.id}`);
-      }
-    } catch (error) {
-      console.error('Error checking if song exists:', error);
-      // On error, navigate to game anyway (it will handle it)
-      navigate(`/game/${channelEncoded}/${titleEncoded}?id=${song.id}`);
-    }
+    // These are songs from the database, so they should always be playable
+    // Navigate directly to game page with query params
+    navigate(`/game?video=${song.id}&title=${titleEncoded}&artist=${channelEncoded}`);
   };
 
   const handleGoHome = () => {

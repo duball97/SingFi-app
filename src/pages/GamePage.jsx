@@ -172,10 +172,31 @@ export default function GamePage() {
     return (
       <div className="game-page">
         <div className="error-screen">
-          <div className="error">Error: {error || 'Game not found'}</div>
-          <button onClick={handleBack} className="back-button">
-            ← Back to Home
-          </button>
+          <div className="error-content" style={{ textAlign: 'center', padding: '2rem' }}>
+            <div className="error-icon" style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+            <h2 style={{ color: '#ff6b35', marginBottom: '0.5rem' }}>There was a small issue</h2>
+            <p style={{ color: '#999', marginBottom: '1.5rem' }}>Please try again</p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <button
+                onClick={() => window.location.reload()}
+                className="retry-button"
+                style={{
+                  background: 'linear-gradient(135deg, #ff6b35, #ff8c42)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Try Again
+              </button>
+              <button onClick={handleBack} className="back-button">
+                ← Back to Home
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

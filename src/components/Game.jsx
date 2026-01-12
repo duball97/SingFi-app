@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import YouTube from 'react-youtube';
 import Lyrics from './Lyrics';
 import PitchBars from './PitchBars';
+import ScoreDisplay from './ScoreDisplay'; // Import new optimizations
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -11,7 +12,9 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   const [duration, setDuration] = useState(0);
   const [userPitch, setUserPitch] = useState(null);
   const [volumeLevel, setVolumeLevel] = useState(0); // For debug display
+  // Score is now managed via ref for high-perf updates, but we keep state for final submission
   const [score, setScore] = useState(0);
+  const displayScoreRef = useRef(0); // Ref for the visual counter
   const [isPlaying, setIsPlaying] = useState(false);
   const [gameState, setGameState] = useState('loading'); // 'loading', 'countdown', 'playing', 'paused', 'ended', 'buffering'
   const [countdown, setCountdown] = useState(3);
@@ -147,6 +150,8 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
 
   // Store currentTime in ref for pitch detection
   const currentTimeRef = useRef(0);
+  const userPitchRef = useRef(null);
+  const notesRef = useRef([]);
   const scoreAccumulatorRef = useRef(0);
   const lastScoreUpdateRef = useRef(Date.now()); // Initialize to current time for immediate first update
 
@@ -164,6 +169,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
   // Initialize notes tracking when notes change
   useEffect(() => {
     if (notes && Array.isArray(notes)) {
+      notesRef.current = notes;
       // Reset tracking flags for all notes
       notes.forEach(note => {
         note._tracked = false;
@@ -174,6 +180,11 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
       sessionSavedRef.current = false;
     }
   }, [notes]);
+
+  // Update userPitchRef when userPitch changes
+  useEffect(() => {
+    userPitchRef.current = userPitch;
+  }, [userPitch]);
 
   // Flush score accumulator and save game session when game ends
   useEffect(() => {
@@ -372,80 +383,64 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
         // Keep showing last pitch for smoother experience - don't clear it
       }
 
-      // Only award score if user is on target for an active note
-      if (detectedFrequency && detectedFrequency > 0) {
+      // ONLY award points if volume is sufficient (lowered threshold to 0.5% for sensitivity)
+      if (detectedFrequency && detectedFrequency > 0 && volumePercent > 0.5) {
         const currentTimeValue = currentTimeRef.current;
-        if (notes && Array.isArray(notes) && notes.length > 0 && currentTimeValue) {
+        const currentNotes = notesRef.current;
+
+        if (currentNotes && currentNotes.length > 0 && currentTimeValue) {
           // Find active note (note that contains currentTime)
-          const activeNote = notes.find(note =>
+          const activeNote = currentNotes.find(note =>
             currentTimeValue >= note.start && currentTimeValue <= note.end
           );
 
           if (activeNote) {
-            // Calculate accuracy based on pitch difference with octave tolerance
-            const tolerance = 300; // Hz tolerance (matches PITCH_TOLERANCE in PitchBars)
+            // Multi-octave matching logic
+            const tolerance = 300; // Match PITCH_TOLERANCE in PitchBars
+            let bestDiff = Math.abs(detectedFrequency - activeNote.targetPitch);
+            let isOnTarget = bestDiff <= tolerance;
 
-            // Check base pitch and octave variations
-            let pitchDiff = Math.abs(detectedFrequency - activeNote.targetPitch);
-            let isOnTarget = pitchDiff <= tolerance;
-
-            // Also check octave variations (singing an octave higher/lower)
-            if (!isOnTarget && activeNote.targetPitch > 0) {
-              const octaveUp = activeNote.targetPitch * 2;
-              const octaveDown = activeNote.targetPitch / 2;
-              const diffUp = Math.abs(detectedFrequency - octaveUp);
-              const diffDown = Math.abs(detectedFrequency - octaveDown);
-              if (diffUp <= tolerance || diffDown <= tolerance) {
+            // Check octaves (-3 to +3)
+            for (let oct = -3; oct <= 3; oct++) {
+              if (oct === 0) continue;
+              const adjTarget = activeNote.targetPitch * Math.pow(2, oct);
+              const diff = Math.abs(detectedFrequency - adjTarget);
+              if (diff <= tolerance) {
                 isOnTarget = true;
-                pitchDiff = Math.min(diffUp, diffDown, pitchDiff);
+                if (diff < bestDiff) bestDiff = diff;
               }
             }
 
-            // Award proportional points even when partially on target
-            // Points scale from 0 (far off) to full (perfect match)
-            // This ensures partial bar fills give proportional scores
             let accuracy = 0;
             if (isOnTarget) {
-              // Within tolerance: 1.0 when perfect, decreasing to 0.0 at edge
-              accuracy = 1 - (pitchDiff / tolerance);
+              accuracy = 1 - (bestDiff / tolerance);
             } else {
-              // Outside tolerance but still award some points for being close
-              // Gradually decrease points up to 2x tolerance
               const extendedTolerance = tolerance * 2;
-              if (pitchDiff <= extendedTolerance) {
-                accuracy = 0.5 * (1 - (pitchDiff - tolerance) / tolerance); // 50% max when just outside tolerance (increased from 30%)
+              if (bestDiff <= extendedTolerance) {
+                accuracy = 0.5 * (1 - (bestDiff - tolerance) / tolerance);
               }
             }
 
+
+
             if (accuracy > 0) {
-              // Award points per second, scaled by accuracy
-              // Max 100k total score, so calculate points based on song duration and note density
-              // Using requestAnimationFrame timing (~16-17ms per frame at 60fps)
-              const timeWeight = 0.016; // ~16ms per frame
-              // Base rate: points per second when perfect
-              // Adjusted to ensure max score of ~100k for a typical song
-              const basePointsPerSecond = 100; // Increased for better visibility
-              const points = basePointsPerSecond * accuracy * timeWeight;
-
-              // Accumulate score to ensure partial fills are counted
-              scoreAccumulatorRef.current += points;
-
-              // Update score state every ~50ms for more responsive updates
+              const basePointsPerSecond = 15000;
+              scoreAccumulatorRef.current += basePointsPerSecond * accuracy * 0.016;
               const now = Date.now();
-              if (now - lastScoreUpdateRef.current >= 50) {
-                if (scoreAccumulatorRef.current > 0) {
-                  setScore(prev => {
-                    const newScore = prev + scoreAccumulatorRef.current;
-                    // Cap score at 100k
-                    return Math.min(newScore, 100000);
-                  });
+              if (now - lastScoreUpdateRef.current >= 16) {
+                const toAdd = scoreAccumulatorRef.current;
+                if (toAdd > 0) {
+                  // DIRECTLY update the ref for instant visual feedback
+                  displayScoreRef.current = Math.min((displayScoreRef.current || 0) + toAdd, 100000);
+                  // Sync to React state less frequently (every 1s or on event) if needed, 
+                  // but for now we trust the ref for display and flush to state on end
+                  setScore(prev => Math.min(prev + toAdd, 100000));
                   scoreAccumulatorRef.current = 0;
                 }
                 lastScoreUpdateRef.current = now;
               }
             }
           }
-          // If no active note, no points awarded
         }
       }
 
@@ -937,8 +932,7 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
             </svg>
           </button>
           <div className="game-score-content">
-            <span className="score-label">SCORE</span>
-            <span className="score-value">{Math.floor(score)}</span>
+            <ScoreDisplay scoreRef={displayScoreRef} />
           </div>
         </div>
 
@@ -1041,13 +1035,45 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
               <>
                 <div className="voice-debug-frequency">
                   <span className="voice-debug-label">Frequency:</span>
-                  <span className="voice-debug-value">
+                  <span className="voice-debug-value" style={{ color: userPitch ? '#ff6b35' : '#666' }}>
                     {userPitch ? `${Math.round(userPitch)} Hz` : 'No signal'}
                   </span>
                 </div>
+                {notes && notes.length > 0 && currentTime && (() => {
+                  const activeNote = notes.find(n => currentTime >= n.start && currentTime <= n.end);
+                  if (activeNote) {
+                    // Quick accuracy check for UI display
+                    let bestDiff = userPitch ? Math.abs(userPitch - activeNote.targetPitch) : 999;
+                    for (let oct = -3; oct <= 3; oct++) {
+                      if (oct === 0) continue;
+                      const diff = Math.abs(userPitch - (activeNote.targetPitch * Math.pow(2, oct)));
+                      if (diff < bestDiff) bestDiff = diff;
+                    }
+                    const isHitting = bestDiff <= 300;
+                    const accuracy = isHitting ? Math.round((1 - (bestDiff / 300)) * 100) : 0;
+
+                    return (
+                      <>
+                        <div className="voice-debug-frequency" style={{ marginTop: '0.25rem' }}>
+                          <span className="voice-debug-label">Target:</span>
+                          <span className="voice-debug-value" style={{ color: '#22c55e' }}>
+                            {Math.round(activeNote.targetPitch)} Hz
+                          </span>
+                        </div>
+                        <div className="voice-debug-frequency" style={{ marginTop: '0.1rem' }}>
+                          <span className="voice-debug-label">Status:</span>
+                          <span className="voice-debug-value" style={{ color: isHitting ? '#22c55e' : '#ff6b35' }}>
+                            {isHitting ? `HIT! (${accuracy}%)` : 'MISS'}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="voice-debug-volume">
                   <span className="voice-debug-label">Volume:</span>
-                  <span className="voice-debug-value" style={{ color: volumeLevel > 5 ? '#22c55e' : '#ff6b35' }}>
+                  <span className="voice-debug-value" style={{ color: volumeLevel > 2 ? '#22c55e' : '#ff6b35' }}>
                     {Math.round(volumeLevel)}%
                   </span>
                 </div>
@@ -1056,18 +1082,18 @@ export default function Game({ videoId, segments, lyrics, notes, firstVerseStart
                     className="voice-debug-bar voice-debug-volume-bar"
                     style={{
                       width: `${volumeLevel}%`,
-                      backgroundColor: volumeLevel > 5 ? '#22c55e' : '#ff6b35'
+                      backgroundColor: volumeLevel > 2 ? '#22c55e' : '#ff6b35'
                     }}
                   />
                 </div>
                 {userPitch && (
                   <div className="voice-debug-visual">
-                    <div className="voice-debug-label" style={{ fontSize: '0.7rem', marginBottom: '0.25rem' }}>Pitch:</div>
+                    <div className="voice-debug-label" style={{ fontSize: '0.7rem', marginBottom: '0.25rem' }}>Visual Range:</div>
                     <div
                       className="voice-debug-bar voice-debug-pitch-bar"
                       style={{
                         width: `${Math.min(100, (userPitch / 1600) * 100)}%`,
-                        backgroundColor: userPitch > 80 && userPitch < 3000 ? '#22c55e' : '#ff6b35'
+                        backgroundColor: '#ff6b35'
                       }}
                     />
                   </div>

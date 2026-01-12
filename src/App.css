@@ -628,7 +628,7 @@
   }
 
   .game-lyrics-container {
-    top: calc(58vh - 20px);
+    top: calc(45vh - 20px);
   }
 }
 
@@ -655,7 +655,7 @@
   }
 
   .game-lyrics-container {
-    top: calc(55vh - 20px);
+    top: calc(40vh - 20px);
     padding: 1.5rem 1rem;
   }
 
@@ -1400,7 +1400,8 @@
 
 .game-lyrics-container {
   position: fixed;
-  top: calc(60vh - 20px);
+  top: calc(45vh + 20px);
+  /* Moved higher up so lyrics are visible on screen */
   left: 0;
   right: 0;
   padding: 2rem 2rem;
@@ -1536,7 +1537,7 @@
 
 .pitch-bars-container {
   width: 100%;
-  height: 100%;
+  height: 200px;
   position: relative;
   transform: translateZ(0);
   /* Force GPU acceleration */
@@ -1544,6 +1545,14 @@
   visibility: visible !important;
   opacity: 1 !important;
   display: block !important;
+}
+
+.pitch-bars-canvas {
+  width: 100%;
+  height: 200px;
+  display: block;
+  transform: translateZ(0);
+  /* Force GPU acceleration for canvas */
 }
 
 .pitch-bars-track {
@@ -1622,7 +1631,7 @@
   z-index: 3;
   min-width: 3px;
   will-change: transform, width, left;
-  transition: width 0.05s linear, left 0.05s linear;
+  /* transition removed for instant responsiveness */
 }
 
 /* On target - orange fill (filled segments) */
@@ -1644,7 +1653,7 @@
     0 0 8px rgba(255, 107, 53, 0.9),
     0 0 16px rgba(255, 107, 53, 0.6);
   z-index: 4;
-  transition: width 0.03s linear, left 0.03s linear;
+  /* transition removed for instant responsiveness */
   will-change: width, left;
 }
 

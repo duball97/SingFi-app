@@ -62,8 +62,8 @@ export default function Lyrics({ segments, currentTime, firstVerseStartTime }) {
 
   // Only update state when index actually changes, and log here
   useEffect(() => {
-    if (currentIdx !== lastIdxRef.current && currentIdx !== -1) {
-      const seg = segments[currentIdx];
+    if (currentIdx !== lastIdxRef.current && currentIdx !== -1 && filteredSegments[currentIdx]) {
+      const seg = filteredSegments[currentIdx];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
       console.log(`SEGMENT CHANGE: Time ${currentTime.toFixed(2)}s → Segment [${currentIdx}] (${start.toFixed(2)}s - ${end.toFixed(2)}s): "${seg.text}"`);

@@ -1,99 +1,14 @@
 import { useMemo, useRef, useEffect, useCallback } from 'react';
 
-// Pitch tolerance for "on target" - higher value = easier to hit notes
-const PITCH_TOLERANCE = 300;
-
-// Merging settings - merge nearby notes with similar pitch into one bar
-const MERGE_TIME_GAP = 0.15; // Max gap between notes to merge (seconds)
-const MERGE_PITCH_TOLERANCE = 80; // Max pitch difference to merge (Hz)
+// SingStar-style pitch bars - simple, clean, aligned to lyrics
+const PITCH_TOLERANCE = 250;
 
 export default function PitchBars({ segments, currentTime, userPitch, notes, firstVerseStartTime }) {
   const canvasRef = useRef(null);
-  const barFillsRef = useRef({});
-  const lastPitchRef = useRef(null);
-  const animationFrameRef = useRef(null);
+  const fillProgressRef = useRef({});
 
-  const WINDOW_DURATION = 5;
-  const MAX_WINDOW_DURATION = 8; // Cap window to prevent super thin bars
-  const TRACK_HEIGHT = 200;
-  const MARGIN = 20;
-  const USABLE_HEIGHT = TRACK_HEIGHT - MARGIN * 2;
-  const BAR_HEIGHT = 30;
-  const FILL_HEIGHT = 20;
-  const MIN_BAR_WIDTH = 40; // Minimum pixel width for bars to be visible
-
-  // Filter and merge notes - combine nearby notes with similar pitch into longer bars
-  const pitchBars = useMemo(() => {
-    if (!notes || !Array.isArray(notes) || notes.length === 0) return [];
-    
-    // Filter by first verse
-    let filteredNotes = notes;
-    if (firstVerseStartTime !== null && firstVerseStartTime !== undefined) {
-      filteredNotes = notes.filter(note => note.start >= firstVerseStartTime);
-    }
-    
-    // Sort by start time
-    const sortedNotes = [...filteredNotes].sort((a, b) => a.start - b.start);
-    
-    // Merge adjacent notes with similar pitch
-    const mergedNotes = [];
-    
-    for (const note of sortedNotes) {
-      const lastMerged = mergedNotes[mergedNotes.length - 1];
-      
-      if (lastMerged) {
-        const timeGap = note.start - lastMerged.end;
-        const pitchDiff = Math.abs(note.targetPitch - lastMerged.targetPitch);
-        
-        // Merge if notes are close in time AND similar in pitch
-        if (timeGap <= MERGE_TIME_GAP && pitchDiff <= MERGE_PITCH_TOLERANCE) {
-          // Extend the last bar to include this note
-          lastMerged.end = note.end;
-          lastMerged.duration = lastMerged.end - lastMerged.start;
-          // Use weighted average for pitch (weighted by duration)
-          const lastDur = lastMerged.end - lastMerged.start - (note.end - note.start);
-          const noteDur = note.end - note.start;
-          const totalDur = lastDur + noteDur;
-          lastMerged.targetPitch = (lastMerged.targetPitch * lastDur + note.targetPitch * noteDur) / totalDur;
-          continue;
-        }
-      }
-      
-      // Add as new bar
-      mergedNotes.push({
-        id: `note-${mergedNotes.length}`,
-        start: note.start,
-        end: note.end,
-        duration: note.duration || (note.end - note.start),
-        targetPitch: note.targetPitch,
-      });
-    }
-    
-    return mergedNotes;
-  }, [notes, firstVerseStartTime]);
-
-  // Calculate dynamic pitch range from actual notes for better visual spread
-  const pitchRange = useMemo(() => {
-    if (!pitchBars || pitchBars.length === 0) return { min: 100, max: 500 };
-    const pitches = pitchBars.map(n => n.targetPitch);
-    const minPitch = Math.min(...pitches);
-    const maxPitch = Math.max(...pitches);
-    // Add 30% padding for user pitch display
-    const range = maxPitch - minPitch;
-    const padding = Math.max(50, range * 0.3);
-    return {
-      min: Math.max(50, minPitch - padding),
-      max: maxPitch + padding
-    };
-  }, [pitchBars]);
-
-  // Pitch to Y position using dynamic range
-  const pitchToY = useCallback((pitch) => {
-    const { min, max } = pitchRange;
-    let pitchPercent = (pitch - min) / (max - min);
-    pitchPercent = Math.max(0, Math.min(1, pitchPercent));
-    return TRACK_HEIGHT - MARGIN - (pitchPercent * USABLE_HEIGHT);
-  }, [pitchRange]);
+  const TRACK_HEIGHT = 180;
+  const BAR_HEIGHT = 24;
 
   // Filter segments for first verse
   const filteredSegments = useMemo(() => {
@@ -104,209 +19,205 @@ export default function PitchBars({ segments, currentTime, userPitch, notes, fir
     return segments;
   }, [segments, firstVerseStartTime]);
 
-  // Get current segment
-  const currentSegment = useMemo(() => {
-    if (!filteredSegments || filteredSegments.length === 0 || !currentTime) return null;
-    for (const seg of filteredSegments) {
+  // Get current segment index
+  const currentSegmentIndex = useMemo(() => {
+    if (!filteredSegments.length) return -1;
+    const time = currentTime || 0;
+    
+    for (let i = 0; i < filteredSegments.length; i++) {
+      const seg = filteredSegments[i];
       const start = Number(seg.start) || 0;
       const end = Number(seg.end) || 0;
-      if (currentTime >= start && currentTime <= end) {
-        return { start, end };
-      }
+      if (time >= start && time <= end) return i;
     }
-    for (let i = filteredSegments.length - 1; i >= 0; i--) {
+    
+    // Find closest upcoming segment
+    for (let i = 0; i < filteredSegments.length; i++) {
       const start = Number(filteredSegments[i].start) || 0;
-      if (currentTime >= start) {
-        return { start, end: Number(filteredSegments[i].end) || 0 };
-      }
+      if (time < start) return i;
     }
-    return null;
+    
+    return filteredSegments.length - 1;
   }, [filteredSegments, currentTime]);
 
-  // Cap window duration to prevent bars from becoming too thin
-  const rawWindowDuration = currentSegment ? (currentSegment.end - currentSegment.start) : WINDOW_DURATION;
-  const windowDuration = Math.min(rawWindowDuration, MAX_WINDOW_DURATION);
-  const windowStart = currentSegment 
-    ? Math.max(currentSegment.start, (currentTime || 0) - windowDuration / 2)
-    : (currentTime ? Math.floor(currentTime / WINDOW_DURATION) * WINDOW_DURATION : 0);
+  const currentSegment = filteredSegments[currentSegmentIndex] || null;
+  const segStart = currentSegment ? (Number(currentSegment.start) || 0) : 0;
+  const segEnd = currentSegment ? (Number(currentSegment.end) || 0) : 5;
+  const segDuration = segEnd - segStart;
 
-  // Visible bars
-  const visibleBars = useMemo(() => {
-    if (!pitchBars.length) return [];
-    if (currentSegment) {
-      return pitchBars.filter(bar => bar.start < currentSegment.end && bar.end > currentSegment.start);
+  // Create simple bars from notes - ONE bar per distinct pitch group in segment
+  const bars = useMemo(() => {
+    if (!notes?.length || !currentSegment) return [];
+    
+    // Get notes that overlap with current segment
+    const segmentNotes = notes.filter(n => 
+      n.start < segEnd && n.end > segStart
+    ).sort((a, b) => a.start - b.start);
+    
+    if (segmentNotes.length === 0) return [];
+    
+    // Group notes into 2-4 bars max per segment based on timing
+    const numBars = Math.min(4, Math.max(1, Math.ceil(segDuration / 1.5)));
+    const barDuration = segDuration / numBars;
+    const result = [];
+    
+    for (let i = 0; i < numBars; i++) {
+      const barStart = segStart + i * barDuration;
+      const barEnd = segStart + (i + 1) * barDuration;
+      
+      // Find notes in this time range
+      const notesInBar = segmentNotes.filter(n => 
+        n.start < barEnd && n.end > barStart
+      );
+      
+      if (notesInBar.length > 0) {
+        // Average pitch of notes in this bar
+        const avgPitch = notesInBar.reduce((sum, n) => sum + n.targetPitch, 0) / notesInBar.length;
+        
+        result.push({
+          id: `bar-${i}`,
+          start: barStart,
+          end: barEnd,
+          pitch: avgPitch,
+        });
+      }
     }
-    const windowEnd = windowStart + WINDOW_DURATION;
-    return pitchBars.filter(bar => bar.start < windowEnd && bar.end > windowStart);
-  }, [pitchBars, currentSegment, windowStart]);
+    
+    return result;
+  }, [notes, currentSegment, segStart, segEnd, segDuration]);
 
-  // Track last pitch
-  useEffect(() => {
-    if (userPitch && userPitch > 0) {
-      lastPitchRef.current = userPitch;
-    }
-  }, [userPitch]);
+  // Calculate pitch range from bars
+  const pitchRange = useMemo(() => {
+    if (!bars.length) return { min: 150, max: 400 };
+    const pitches = bars.map(b => b.pitch);
+    const minP = Math.min(...pitches);
+    const maxP = Math.max(...pitches);
+    const padding = Math.max(80, (maxP - minP) * 0.5);
+    return { min: minP - padding, max: maxP + padding };
+  }, [bars]);
 
-  // Check if pitch is on target (with octave tolerance)
-  const isOnTarget = useCallback((pitch, targetPitch) => {
-    if (!pitch || !targetPitch) return false;
-    let diff = Math.abs(pitch - targetPitch);
-    if (diff <= PITCH_TOLERANCE) return true;
-    for (let oct = -3; oct <= 3; oct++) {
+  const pitchToY = useCallback((pitch) => {
+    const { min, max } = pitchRange;
+    const percent = Math.max(0, Math.min(1, (pitch - min) / (max - min)));
+    return TRACK_HEIGHT - 20 - (percent * (TRACK_HEIGHT - 40));
+  }, [pitchRange]);
+
+  // Check pitch match with octave tolerance
+  const isOnTarget = useCallback((userP, targetP) => {
+    if (!userP || !targetP) return false;
+    if (Math.abs(userP - targetP) <= PITCH_TOLERANCE) return true;
+    // Check octaves
+    for (let oct = -2; oct <= 2; oct++) {
       if (oct === 0) continue;
-      const adjTarget = targetPitch * Math.pow(2, oct);
-      if (Math.abs(pitch - adjTarget) <= PITCH_TOLERANCE) return true;
+      if (Math.abs(userP - targetP * Math.pow(2, oct)) <= PITCH_TOLERANCE) return true;
     }
     return false;
   }, []);
 
-  // Canvas draw loop
+  // Draw
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
+    
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-
-    // Set canvas size
     const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    
     canvas.width = rect.width * dpr;
     canvas.height = TRACK_HEIGHT * dpr;
     ctx.scale(dpr, dpr);
-    canvas.style.height = `${TRACK_HEIGHT}px`;
 
-    const draw = () => {
-      ctx.clearRect(0, 0, rect.width, TRACK_HEIGHT);
+    ctx.clearRect(0, 0, rect.width, TRACK_HEIGHT);
+    
+    const time = currentTime || 0;
+    const pitch = userPitch;
 
-      const winDur = windowDuration || WINDOW_DURATION;
-      const winStart = windowStart || 0;
-      const time = currentTime || 0;
-      const pitch = userPitch || lastPitchRef.current;
-
-      // Draw note bars (empty)
-      visibleBars.forEach(bar => {
-        const barStartPercent = Math.max(0, ((bar.start - winStart) / winDur));
-        const barEndPercent = Math.min(1, ((bar.end - winStart) / winDur));
-        let barWidth = (barEndPercent - barStartPercent) * rect.width;
-        let barX = barStartPercent * rect.width;
-        
-        // Enforce minimum bar width so bars are always visible
-        if (barWidth < MIN_BAR_WIDTH) {
-          const extraWidth = MIN_BAR_WIDTH - barWidth;
-          barX = Math.max(0, barX - extraWidth / 2);
-          barWidth = MIN_BAR_WIDTH;
-        }
-        
-        const barY = pitchToY(bar.targetPitch) - BAR_HEIGHT / 2;
-
-        const isActive = time >= bar.start && time < bar.end;
-
-        // Empty bar (outline)
-        ctx.strokeStyle = isActive ? 'rgba(255, 107, 53, 0.8)' : 'rgba(255, 107, 53, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(barX, barY, barWidth, BAR_HEIGHT, 13);
-        ctx.stroke();
-
-        // Fill based on whether on target
-        if (isActive && pitch && isOnTarget(pitch, bar.targetPitch)) {
-          // Update fill tracking
-          if (!barFillsRef.current[bar.id]) {
-            barFillsRef.current[bar.id] = { filledSegments: [], lastEnd: bar.start };
-          }
-          const fillState = barFillsRef.current[bar.id];
-          const lastSeg = fillState.filledSegments[fillState.filledSegments.length - 1];
-
-          if (lastSeg && time - lastSeg.end < 0.05) {
-            lastSeg.end = time;
-          } else {
-            fillState.filledSegments.push({ start: fillState.lastEnd, end: time });
-          }
-          fillState.lastEnd = time;
-        }
-
-        // Draw filled segments
-        const fills = barFillsRef.current[bar.id]?.filledSegments || [];
-        fills.forEach(seg => {
-          const segStartPercent = ((seg.start - bar.start) / bar.duration);
-          const segEndPercent = ((seg.end - bar.start) / bar.duration);
-          const segX = barX + segStartPercent * barWidth;
-          const segW = (segEndPercent - segStartPercent) * barWidth;
-
-          if (segW > 0) {
-            ctx.fillStyle = 'rgba(255, 107, 53, 0.9)';
-            ctx.shadowColor = 'rgba(255, 107, 53, 0.6)';
-            ctx.shadowBlur = 8;
-            ctx.beginPath();
-            ctx.roundRect(segX, barY + (BAR_HEIGHT - FILL_HEIGHT) / 2, segW, FILL_HEIGHT, 10);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-          }
-        });
-      });
-
-      // Draw time cursor
-      if (time >= winStart && time < winStart + winDur) {
-        const cursorX = ((time - winStart) / winDur) * rect.width;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cursorX, 0);
-        ctx.lineTo(cursorX, TRACK_HEIGHT);
-        ctx.stroke();
+    // Draw each bar
+    bars.forEach(bar => {
+      const startPct = (bar.start - segStart) / segDuration;
+      const endPct = (bar.end - segStart) / segDuration;
+      const x = startPct * rect.width;
+      const w = Math.max(60, (endPct - startPct) * rect.width); // Min 60px width
+      const y = pitchToY(bar.pitch) - BAR_HEIGHT / 2;
+      
+      const isActive = time >= bar.start && time < bar.end;
+      const isPast = time >= bar.end;
+      
+      // Bar background
+      ctx.fillStyle = isPast ? 'rgba(255, 107, 53, 0.15)' : 'rgba(255, 107, 53, 0.25)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, BAR_HEIGHT, 12);
+      ctx.fill();
+      
+      // Bar border
+      ctx.strokeStyle = isActive ? 'rgba(255, 107, 53, 1)' : 'rgba(255, 107, 53, 0.5)';
+      ctx.lineWidth = isActive ? 3 : 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, BAR_HEIGHT, 12);
+      ctx.stroke();
+      
+      // Track fill progress
+      if (isActive && pitch && isOnTarget(pitch, bar.pitch)) {
+        const progress = (time - bar.start) / (bar.end - bar.start);
+        fillProgressRef.current[bar.id] = Math.max(
+          fillProgressRef.current[bar.id] || 0,
+          progress
+        );
       }
-
-      // Draw user pitch line
-      if (pitch && pitch > 0) {
-        const pitchY = pitchToY(pitch);
-
-        // Glow effect
-        ctx.shadowColor = 'rgba(255, 107, 53, 0.8)';
-        ctx.shadowBlur = 15;
-
-        // Horizontal line
-        ctx.strokeStyle = 'rgba(255, 107, 53, 1)';
-        ctx.lineWidth = 3;
+      
+      // Draw fill
+      const fillPct = fillProgressRef.current[bar.id] || 0;
+      if (fillPct > 0) {
+        ctx.fillStyle = 'rgba(255, 107, 53, 0.8)';
         ctx.beginPath();
-        ctx.moveTo(0, pitchY);
-        ctx.lineTo(rect.width, pitchY);
-        ctx.stroke();
-
-        // Dot at current time
-        if (time >= winStart && time < winStart + winDur) {
-          const dotX = ((time - winStart) / winDur) * rect.width;
-          ctx.fillStyle = '#ff6b35';
-          ctx.beginPath();
-          ctx.arc(dotX, pitchY, 8, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.shadowBlur = 0;
+        ctx.roundRect(x + 3, y + 3, (w - 6) * fillPct, BAR_HEIGHT - 6, 9);
+        ctx.fill();
       }
+    });
 
-      animationFrameRef.current = requestAnimationFrame(draw);
-    };
+    // Draw playhead
+    const playheadPct = (time - segStart) / segDuration;
+    if (playheadPct >= 0 && playheadPct <= 1) {
+      const px = playheadPct * rect.width;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, TRACK_HEIGHT);
+      ctx.stroke();
+    }
 
-    animationFrameRef.current = requestAnimationFrame(draw);
+    // Draw user pitch dot
+    if (pitch && pitch > 0 && playheadPct >= 0 && playheadPct <= 1) {
+      const py = pitchToY(pitch);
+      const px = playheadPct * rect.width;
+      
+      ctx.shadowColor = '#ff6b35';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#ff6b35';
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [currentTime, userPitch, visibleBars, windowStart, windowDuration, pitchToY, isOnTarget]);
+  }, [currentTime, userPitch, bars, segStart, segDuration, pitchToY, isOnTarget]);
 
-  // Reset fills when notes change
+  // Reset fills on segment change
   useEffect(() => {
-    barFillsRef.current = {};
-  }, [notes]);
+    fillProgressRef.current = {};
+  }, [currentSegmentIndex]);
+
+  if (!currentSegment || bars.length === 0) {
+    return <div className="pitch-bars-container" style={{ height: TRACK_HEIGHT }} />;
+  }
 
   return (
     <div className="pitch-bars-container">
       <canvas
         ref={canvasRef}
         className="pitch-bars-canvas"
-        style={{ width: '100%', height: `${TRACK_HEIGHT}px`, display: 'block' }}
+        style={{ width: '100%', height: TRACK_HEIGHT, display: 'block' }}
       />
     </div>
   );
